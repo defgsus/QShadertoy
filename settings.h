@@ -11,17 +11,34 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#include <QObject>
+#include <QString>
+#include <QVariant>
 
-class Settings : public QObject
+class QWidget;
+class QSettings;
+
+/** Application settings wrapper */
+class Settings
 {
-    Q_OBJECT
+    explicit Settings();
+    ~Settings();
 public:
-    explicit Settings(QObject *parent = 0);
 
-signals:
+    static const QString keyAppkey;
 
-public slots:
+    /** Global instance */
+    static Settings& instance();
+
+    bool contains(const QString& key) const;
+    QVariant value(const QString& key, const QVariant& def = QVariant()) const;
+
+    void restoreGeometry(QWidget*) const;
+
+    void setValue(const QString& key, const QVariant& v);
+    void storeGeometry(const QWidget*);
+
+private:
+    QSettings* p_set_;
 };
 
 #endif // SETTINGS_H

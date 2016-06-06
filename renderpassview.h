@@ -13,15 +13,30 @@
 
 #include <QWidget>
 
+class ShadertoyShader;
+
 class RenderPassView : public QWidget
 {
     Q_OBJECT
 public:
     explicit RenderPassView(QWidget *parent = 0);
+    ~RenderPassView();
+
+    const ShadertoyShader& shader() const;
 
 signals:
 
 public slots:
+
+    void setShader(const ShadertoyShader&);
+
+private slots:
+
+    void p_onTexture_(const QString& src, const QImage& img);
+
+private:
+    struct Private;
+    Private* p_;
 };
 
 #endif // RENDERPASSVIEW_H

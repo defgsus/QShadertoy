@@ -11,17 +11,25 @@
 #ifndef SHADERSORTMODEL_H
 #define SHADERSORTMODEL_H
 
-#include <QObject>
+#include <QSortFilterProxyModel>
+#include <QStringList>
 
-class ShaderSortModel : public QObject
+class ShaderSortModel : public QSortFilterProxyModel
 {
     Q_OBJECT
 public:
     explicit ShaderSortModel(QObject *parent = 0);
 
-signals:
+    void setFulltextFilter(const QString&);
 
-public slots:
+protected:
+
+    bool filterAcceptsRow(
+            int source_row, const QModelIndex &source_parent) const override;
+
+private:
+
+    QStringList p_fulltextFilters_;
 };
 
 #endif // SHADERSORTMODEL_H

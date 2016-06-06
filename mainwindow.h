@@ -20,6 +20,15 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
+
+private slots:
+
+    void p_onShaderList_();
+    void p_onShader_();
+
+private:
+    struct Private;
+    Private* p_;
 };
 
 #endif // MAINWINDOW_H
