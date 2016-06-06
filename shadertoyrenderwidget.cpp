@@ -115,14 +115,16 @@ void ShadertoyRenderWidget::timerEvent(QTimerEvent*)
 
 void ShadertoyRenderWidget::mousePressEvent(QMouseEvent* e)
 {
-    p_->mousePos = e->pos();
+    p_->mousePos.rx() = e->x();
+    p_->mousePos.ry() = height() - 1 - e->y();
     p_->mouseKeys = e->buttons();
     rerender();
 }
 
 void ShadertoyRenderWidget::mouseMoveEvent(QMouseEvent* e)
 {
-    p_->mousePos = e->pos();
+    p_->mousePos.rx() = e->x();
+    p_->mousePos.ry() = height() - 1 - e->y();
     p_->mouseKeys = e->buttons();
     rerender();
 }

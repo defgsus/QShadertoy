@@ -24,7 +24,8 @@ SOURCES += main.cpp\
     renderpassview.cpp \
     shadertoyrenderwidget.cpp \
     log.cpp \
-    logview.cpp
+    logview.cpp \
+    tableplotview.cpp
 
 HEADERS  += mainwindow.h \
     shadertoyapi.h \
@@ -36,4 +37,5 @@ HEADERS  += mainwindow.h \
     renderpassview.h \
     shadertoyrenderwidget.h \
     log.h \
-    logview.h
+    logview.h \
+    tableplotview.h

@@ -27,6 +27,7 @@
 #include "shadersortmodel.h"
 #include "renderpassview.h"
 #include "shadertoyrenderwidget.h"
+#include "tableplotview.h"
 #include "settings.h"
 #include "logview.h"
 
@@ -57,6 +58,7 @@ struct MainWindow::Private
     QLineEdit* tableFilterEdit;
     QTableView* shaderTable;
     RenderPassView* passView;
+    TablePlotView* plotView;
     QLabel * infoLabel;
 
 };
@@ -159,12 +161,19 @@ void MainWindow::Private::createWidgets()
                 connect(shaderTable, &QTableView::doubleClicked,
                         [=](const QModelIndex& idx){ setShader(idx); });
 
-
             lv1 = new QVBoxLayout();
             lh->addLayout(lv1);
 
-                passView = new RenderPassView(win);
-                lv1->addWidget(passView);
+                auto tab = new QTabWidget(win);
+                lv1->addWidget(tab);
+
+                    passView = new RenderPassView(win);
+                    tab->addTab(passView, "source");
+
+                    plotView = new TablePlotView(win);
+                    plotView->setModel(shaderList);
+                    tab->addTab(plotView, "plot");
+
 
                 auto logView = new LogView(win);
                 lv1->addWidget(logView);
