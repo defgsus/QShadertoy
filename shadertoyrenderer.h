@@ -21,6 +21,12 @@ class ShadertoyRenderer : public QObject
 {
     Q_OBJECT
 public:
+    enum Projection
+    {
+        P_RECT,
+        P_FISHEYE
+    };
+
     explicit ShadertoyRenderer(QObject *parent = 0);
     explicit ShadertoyRenderer(QOpenGLContext* ctx, QObject *parent = 0);
     explicit ShadertoyRenderer(QOpenGLContext* ctx, QSurface*, QObject *parent = 0);
@@ -32,6 +38,8 @@ public:
     /** The description of the last error occured
         during compilation or rendering */
     const QString& errorString() const;
+
+    Projection projection() const;
 
 signals:
 
@@ -48,6 +56,7 @@ public slots:
         it's buffers. If the resolution changes, the next call
         to render() will recompile everything. */
     void setResolution(const QSize& );
+    void setProjection(Projection p);
 
     void setMouse(const QPoint& pos, bool leftKey, bool rightKey);
     void setGlobalTime(float ti);

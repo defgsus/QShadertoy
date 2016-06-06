@@ -24,12 +24,13 @@ public:
 
     float playbackTime() const;
 
+    QWidget* createPlaybar(QWidget* parent);
+
 signals:
 
 public slots:
 
     void setShader(const ShadertoyShader&);
-
     void setPlaying(bool);
     void rewind();
     //void setPlaybackTime(double);

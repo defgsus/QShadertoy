@@ -112,43 +112,7 @@ void MainWindow::Private::createWidgets()
                 lv1->addWidget(renderWidget);
 
                 // playbar
-                auto lh1 = new QHBoxLayout();
-                lv1->addLayout(lh1);
-
-                    auto but = new QToolButton(win);
-                    but->setText("|<");
-                    lh1->addWidget(but);
-                    connect(but, &QToolButton::clicked, [=]()
-                    {
-                        renderWidget->rewind();
-                    });
-
-                    but = new QToolButton(win);
-                    but->setText(">");
-                    lh1->addWidget(but);
-                    connect(but, &QToolButton::clicked, [=]()
-                    {
-                        renderWidget->setPlaying(true);
-                    });
-
-                    but = new QToolButton(win);
-                    but->setText("#");
-                    lh1->addWidget(but);
-                    connect(but, &QToolButton::clicked, [=]()
-                    {
-                        renderWidget->setPlaying(false);
-                    });
-
-                    lh1->addStretch();
-
-                    auto timeLabel = new QLabel(win);
-                    lh1->addWidget(timeLabel);
-                    connect(renderWidget, &ShadertoyRenderWidget::frameSwapped,
-                            [=]()
-                    {
-                        timeLabel->setText(
-                            QString("%1").arg(renderWidget->playbackTime()));
-                    });
+                lv1->addWidget(renderWidget->createPlaybar(win));
 
                 // shader list
                 tableFilterEdit = new QLineEdit(win);

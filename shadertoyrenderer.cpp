@@ -39,6 +39,7 @@ struct ShadertoyRenderer::Private
     Private(ShadertoyRenderer* p)
         : p             (p)
         , resolution    (256, 256)
+        , projectionMode(P_RECT)
         , api           (new ShadertoyApi(p))
         , context       (nullptr)
         , surface       (nullptr)
@@ -96,6 +97,7 @@ struct ShadertoyRenderer::Private
     ShadertoyRenderer* p;
 
     QSize resolution;
+    Projection projectionMode;
     QString errorStr;
 
     ShadertoyApi* api;
@@ -189,7 +191,13 @@ void ShadertoyRenderer::setDate(const QDateTime& dt)
 void ShadertoyRenderer::setGlobalTime(float ti) { p_->globalTime = ti; }
 void ShadertoyRenderer::setTimeDelta(float ti) { p_->timeDelta = ti; }
 void ShadertoyRenderer::setFrameNumber(int f) { p_->frameNumber = f; }
-
+void ShadertoyRenderer::setProjection(Projection p)
+{
+    if (p_->projectionMode == p)
+        return;
+    p_->projectionMode = p;
+    p_->needsRecompile = true;
+}
 
 
 QOpenGLBuffer* ShadertoyRenderer::Private::createBuffer(
@@ -250,6 +258,14 @@ bool ShadertoyRenderer::Private::createGl()
 "{\n"
 "    mainImage(gl_FragColor, gl_FragCoord.xy);\n"
 //"    gl_FragColor = vec4(gl_FragCoord.xy / iResolution.xy, 0,1);\n"
+"}\n"
+            , fragSrcVr =
+"void main()\n"
+"{\n"
+"    vec2 uv = (gl_FragCoord.xy - .5*iResolution.xy) / iResolution.y * 2.;\n"
+"    vec3 ro = vec3(0.);\n"
+"    vec3 rd = normalize(vec3(uv, -2. + length(uv)));\n"
+"    mainVR(gl_FragColor, gl_FragCoord.xy, ro, rd);\n"
 "}\n"
     ;
 
@@ -360,7 +376,11 @@ bool ShadertoyRenderer::Private::createGl()
 
         auto frag = new QOpenGLShader(QOpenGLShader::Fragment, rp.shader);
         QString src =
-            fragSrc1 + fragSrc1b + pass.fragmentSource() + fragSrc2;
+            fragSrc1 + fragSrc1b + pass.fragmentSource();
+        if (projectionMode == P_RECT)
+            src += fragSrc2;
+        else
+            src += fragSrcVr;
         if (!frag->compileSourceCode(src))
         {
             STRENDER_ERROR(tr("compile failed (pass: %1):\n%2")

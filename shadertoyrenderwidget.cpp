@@ -15,6 +15,9 @@
 #include <QMouseEvent>
 #include <QTime>
 #include <QBasicTimer>
+#include <QToolButton>
+#include <QLabel>
+#include <QLayout>
 
 #include "shadertoyrenderwidget.h"
 #include "shadertoyrenderer.h"
@@ -47,6 +50,8 @@ struct ShadertoyRenderWidget::Private
     QBasicTimer timer;
     QTime timeMessure;
     float pauseTime, timeOffset;
+
+    QToolButton* butProj;
 };
 
 
@@ -87,6 +92,7 @@ void ShadertoyRenderWidget::setPlaying(bool e)
     p_->isPlaying = e;
     if (p_->isPlaying)
     {
+        // XXX well, how 'Precise' can integer be?
         p_->timer.start(1000/60, Qt::PreciseTimer, this);
         p_->timeMessure.start();
         p_->timeOffset = p_->pauseTime;
@@ -189,6 +195,9 @@ void ShadertoyRenderWidget::paintGL()
     p_->hasNewShader = false;
 
     p_->render->setResolution(size());
+    p_->render->setProjection(p_->butProj->isChecked()
+                              ? ShadertoyRenderer::P_FISHEYE
+                              : ShadertoyRenderer::P_RECT);
     p_->render->setGlobalTime(playbackTime());
     p_->render->setFrameNumber(p_->frame++);
     p_->render->setMouse(p_->mousePos, p_->mouseKeys & Qt::LeftButton,
@@ -204,4 +213,58 @@ void ShadertoyRenderWidget::paintGL()
         p.drawText(rect(), Qt::AlignCenter,
                    tr("shader error\n%1").arg(p_->render->errorString()));
     }
+}
+
+QWidget* ShadertoyRenderWidget::createPlaybar(QWidget*parent)
+{
+    QWidget* container = new QWidget(parent);
+    auto lh = new QHBoxLayout(container);
+
+        auto but = new QToolButton(container);
+        but->setText("|<");
+        lh->addWidget(but);
+        connect(but, &QToolButton::clicked, [=]()
+        {
+            rewind();
+        });
+
+        but = new QToolButton(container);
+        but->setText(">");
+        lh->addWidget(but);
+        connect(but, &QToolButton::clicked, [=]()
+        {
+            setPlaying(true);
+        });
+
+        but = new QToolButton(container);
+        but->setText("#");
+        lh->addWidget(but);
+        connect(but, &QToolButton::clicked, [=]()
+        {
+            setPlaying(false);
+        });
+
+        lh->addStretch();
+
+        but = p_->butProj = new QToolButton(container);
+        but->setText("VR");
+        but->setCheckable(true);
+        lh->addWidget(but);
+        connect(but, &QToolButton::clicked, [=]()
+        {
+            update();
+        });
+
+        lh->addStretch();
+
+        auto timeLabel = new QLabel(container);
+        timeLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+        lh->addWidget(timeLabel);
+        connect(this, &ShadertoyRenderWidget::frameSwapped,
+                [=]()
+        {
+            timeLabel->setText(QString("%1").arg(playbackTime()));
+        });
+
+    return container;
 }
