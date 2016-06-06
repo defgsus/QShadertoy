@@ -14,6 +14,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QLabel>
+#include <QToolButton>
 #include <QFont>
 #include <QJsonDocument>
 #include <QImage>
@@ -22,6 +23,7 @@
 #include "renderpassview.h"
 #include "shadertoyshader.h"
 #include "shadertoyapi.h"
+#include "log.h"
 
 struct RenderPassView::Private
 {
@@ -37,13 +39,15 @@ struct RenderPassView::Private
     struct InputWidget
     {
         QLabel *desc, *imgLabel;
-        QComboBox *interpol, *wrap;
+        QComboBox *filter, *wrap;
         QCheckBox *vFlip;
         QString src;
     };
 
     void createWidgets();
     void selectTab(int idx);
+    void sourceEdited();
+    void inputsEdited();
 
     RenderPassView* p;
     ShadertoyShader shader;
@@ -80,7 +84,6 @@ void RenderPassView::Private::createWidgets()
     });
 
     textEdit = new QPlainTextEdit(p);
-    textEdit->setReadOnly(true);
     lv->addWidget(textEdit);
 
     // XXX does not work for Mac
@@ -104,14 +107,20 @@ void RenderPassView::Private::createWidgets()
             iw.imgLabel = new QLabel(p);
             lv->addWidget(iw.imgLabel);
 
-            iw.interpol = new QComboBox(p);
-            iw.interpol->addItem(
+            iw.filter = new QComboBox(p);
+            iw.filter->addItem(
                         ShadertoyInput::nameForType(ShadertoyInput::F_NEAREST),
                         (int)ShadertoyInput::F_NEAREST);
-            iw.interpol->addItem(
+            iw.filter->addItem(
                         ShadertoyInput::nameForType(ShadertoyInput::F_LINEAR),
                         (int)ShadertoyInput::F_LINEAR);
-            lv->addWidget(iw.interpol);
+            iw.filter->addItem(
+                        ShadertoyInput::nameForType(ShadertoyInput::F_MIPMAP),
+                        (int)ShadertoyInput::F_MIPMAP);
+            connect(iw.filter, static_cast<void(QComboBox::*)(int)>
+                    (&QComboBox::currentIndexChanged),
+                        [=](){ inputsEdited(); });
+            lv->addWidget(iw.filter);
 
             iw.wrap = new QComboBox(p);
             iw.wrap->addItem(
@@ -120,17 +129,28 @@ void RenderPassView::Private::createWidgets()
             iw.wrap->addItem(
                         ShadertoyInput::nameForType(ShadertoyInput::W_REPEAT),
                         (int)ShadertoyInput::W_REPEAT);
+            connect(iw.wrap, static_cast<void(QComboBox::*)(int)>
+                    (&QComboBox::currentIndexChanged),
+                        [=](){ inputsEdited(); });
             lv->addWidget(iw.wrap);
 
             iw.vFlip = new QCheckBox(tr("v-flip"), p);
+            connect(iw.vFlip, &QCheckBox::toggled, [=]() { inputsEdited(); });
             lv->addWidget(iw.vFlip);
 
             inputWidgets.push_back(iw);
         }
 
+    auto but = new QToolButton(p);
+    but->setText(">");
+    but->setShortcut(Qt::ALT + Qt::Key_Return);
+    connect(but, &QToolButton::clicked, [=]() { sourceEdited(); });
+    lv->addWidget(but);
+
     jsonView = new QPlainTextEdit(p);
     jsonView->setReadOnly(true);
     lv->addWidget(jsonView);
+    jsonView->setVisible(false);
 }
 
 const ShadertoyShader& RenderPassView::shader() const { return p_->shader; }
@@ -161,7 +181,7 @@ void RenderPassView::Private::selectTab(int idx)
         {
             InputWidget& iw = inputWidgets[i];
             iw.desc->setText("-");
-            iw.interpol->setEnabled(false);
+            iw.filter->setEnabled(false);
             iw.wrap->setEnabled(false);
             iw.vFlip->setEnabled(false);
         }
@@ -183,7 +203,7 @@ void RenderPassView::Private::selectTab(int idx)
         if (i >= rp.numInputs())
         {
             iw.desc->setText("-");
-            iw.interpol->setEnabled(false);
+            iw.filter->setEnabled(false);
             iw.wrap->setEnabled(false);
             iw.vFlip->setEnabled(false);
         }
@@ -191,14 +211,14 @@ void RenderPassView::Private::selectTab(int idx)
         {
             const ShadertoyInput& inp = rp.input(i);
 
-            iw.interpol->setEnabled(true);
+            iw.filter->setEnabled(true);
             iw.wrap->setEnabled(true);
             iw.vFlip->setEnabled(true);
 
             iw.desc->setText(inp.typeName());
             iw.vFlip->setChecked(inp.vFlip);
 
-            iw.interpol->setCurrentText(inp.filterTypeName());
+            iw.filter->setCurrentText(inp.filterTypeName());
             iw.wrap->setCurrentText(inp.wrapModeName());
 
             iw.src = inp.src;
@@ -214,17 +234,43 @@ void RenderPassView::Private::selectTab(int idx)
 
 void RenderPassView::p_onTexture_(const QString &src, const QImage &img)
 {
-    /*
-    int idx = p_->tabBar->currentIndex();
-    if (idx < 0 || idx > 4)
-        return;
-    */
-
     for (size_t i=0; i<4; ++i)
     {
         Private::InputWidget& iw = p_->inputWidgets[i];
         if (iw.src == src)
             iw.imgLabel->setPixmap(QPixmap::fromImage(
-                                       img.scaled(128,128)));
+                                       img.scaled(64,64)));
     }
+}
+
+void RenderPassView::Private::sourceEdited()
+{
+    int idx = tabBar->currentIndex();
+    if (idx < 0 || (size_t)idx > shader.numRenderPasses())
+        return;
+    auto pass = shader.renderPass(idx);
+    pass.setFragmentSource(textEdit->toPlainText());
+    shader.setRenderPass(idx, pass);
+    emit p->shaderChanged();
+}
+
+
+void RenderPassView::Private::inputsEdited()
+{
+    int idx = tabBar->currentIndex();
+    if (idx < 0 || (size_t)idx > shader.numRenderPasses())
+        return;
+    auto pass = shader.renderPass(idx);
+    for (size_t i=0; i<pass.numInputs(); ++i)
+    {
+        auto inp = pass.input(i);
+        inp.vFlip = inputWidgets[i].vFlip->isChecked();
+        inp.wrapMode = (ShadertoyInput::WrapMode)
+                inputWidgets[i].wrap->currentData().toInt();
+        inp.filterType = (ShadertoyInput::FilterType)
+                inputWidgets[i].filter->currentData().toInt();
+        pass.setInput(i, inp);
+    }
+    shader.setRenderPass(idx, pass);
+    emit p->shaderChanged();
 }

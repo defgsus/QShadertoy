@@ -28,6 +28,8 @@ struct ShadertoyRenderWidget::Private
         , hasNewShader  (true)
         , mouseKeys     (0)
         , isPlaying     (false)
+        , pauseTime     (0.f)
+        , timeOffset    (0.f)
     {
     }
 
@@ -44,6 +46,7 @@ struct ShadertoyRenderWidget::Private
     int frame;
     QBasicTimer timer;
     QTime timeMessure;
+    float pauseTime, timeOffset;
 };
 
 
@@ -78,19 +81,27 @@ void ShadertoyRenderWidget::setPlaying(bool e)
 {
     if (e == p_->isPlaying)
         return;
+    if (!e)
+        p_->pauseTime = playbackTime();
+
     p_->isPlaying = e;
     if (p_->isPlaying)
     {
         p_->timer.start(1000/60, Qt::PreciseTimer, this);
         p_->timeMessure.start();
+        p_->timeOffset = p_->pauseTime;
     }
     else
+    {
         p_->timer.stop();
+    }
 }
 
 void ShadertoyRenderWidget::rewind()
 {
     p_->frame = 0;
+    p_->pauseTime = 0.f;
+    p_->timeOffset = 0.f;
     p_->timeMessure.start();
     rerender();
 }
@@ -99,6 +110,14 @@ void ShadertoyRenderWidget::rerender()
 {
     if (!p_->isPlaying)
         update();
+}
+
+float ShadertoyRenderWidget::playbackTime() const
+{
+    if (p_->isPlaying)
+        return p_->timeOffset + float(p_->timeMessure.elapsed()) / 1000.f;
+    else
+        return p_->pauseTime;
 }
 
 /*
@@ -170,7 +189,7 @@ void ShadertoyRenderWidget::paintGL()
     p_->hasNewShader = false;
 
     p_->render->setResolution(size());
-    p_->render->setGlobalTime(float(p_->timeMessure.elapsed()) / 1000.f);
+    p_->render->setGlobalTime(playbackTime());
     p_->render->setFrameNumber(p_->frame++);
     p_->render->setMouse(p_->mousePos, p_->mouseKeys & Qt::LeftButton,
                                        p_->mouseKeys & Qt::RightButton);

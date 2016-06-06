@@ -7,11 +7,12 @@
 
     <p>created 5/30/2016</p>
 */
-#include <QDebug>
+
 #include <QJsonArray>
+#include <QTextStream>
 
 #include "shadertoyshader.h"
-
+#include "log.h"
 
 QString ShadertoyInput::nameForType(Type t)
 {
@@ -33,6 +34,7 @@ QString ShadertoyInput::nameForType(FilterType t)
     {
         case F_NEAREST: return "nearest";
         case F_LINEAR: return "linear";
+        case F_MIPMAP: return "mipmap";
         default: return "*unknown*";
     }
 }
@@ -47,6 +49,21 @@ QString ShadertoyInput::nameForType(WrapMode t)
     }
 }
 
+QString ShadertoyInput::toString() const
+{
+    QString str;
+    QTextStream s(&str);
+    s << typeName() << ", src=" << src
+      << ", chan=" << channel << ", id=" << id
+      << ", wrap=" << wrapModeName()
+      << ", filter=" << filterTypeName()
+      << ", vflip=" << (vFlip ? "yes" : "no")
+         ;
+    return str;
+}
+
+
+
 QString ShadertoyRenderPass::nameForType(Type t)
 {
     switch (t)
@@ -58,6 +75,52 @@ QString ShadertoyRenderPass::nameForType(Type t)
     }
 }
 
+void ShadertoyRenderPass::setFragmentSource(const QString& s)
+{
+    p_code_ = s;
+    p_data_.insert("code", QJsonValue(s));
+}
+
+void ShadertoyRenderPass::setInput(size_t idx, const ShadertoyInput& inp)
+{
+    if ((int)idx < p_inputs_.size())
+        p_inputs_[idx] = inp;
+
+    auto ins = p_data_.value("inputs").toArray();
+    // Todo: append or insert
+    if ((int)idx > ins.count())
+        return;
+
+    auto in = ins[idx].toObject();
+    //in.insert("channel", inp.channel);
+    //in.insert("id", inp.id);
+    //in.insert("src", inp.src);
+    in.insert("vflip", (int)inp.vFlip);
+    switch (inp.type)
+    {
+        case ShadertoyInput::T_KEYBOARD:
+            in.insert("ctype", "keyboard"); break;
+        case ShadertoyInput::T_MUSICSTREAM:
+            in.insert("ctype", "musicstream"); break;
+        case ShadertoyInput::T_MUSIC:
+            in.insert("ctype", "music"); break;
+        case ShadertoyInput::T_BUFFER:
+            in.insert("ctype", "buffer"); break;
+        case ShadertoyInput::T_CUBEMAP:
+            in.insert("ctype", "cubemap"); break;
+        default: in.insert("ctype", "texture"); break;
+    }
+    if (inp.filterType == ShadertoyInput::F_LINEAR)
+        in.insert("filter", "linear");
+    else if (inp.filterType == ShadertoyInput::F_MIPMAP)
+        in.insert("filter", "mipmap");
+    else
+        in.insert("filter", "nearest");
+    if (inp.wrapMode == ShadertoyInput::W_REPEAT)
+        in.insert("wrap", "repeat");
+    else
+        in.insert("wrap", "clamp");
+}
 
 
 
@@ -143,7 +206,6 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
             inp.channel = in.value("channel").toInt();
             inp.id = in.value("id").toInt();
             inp.src = in.value("src").toString();
-            inp.vFlip = in.value("vflip").toBool();
 
             const QString ctype = in.value("ctype").toString();
             if (ctype == "keyboard")
@@ -171,17 +233,24 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
                 inp.type = ShadertoyInput::T_TEXTURE;
             }
 
-            const QString ftype = in.value("filter").toString();
+            auto sampler = in.value("sampler").toObject();
+
+            inp.vFlip = sampler.value("vflip").toBool();
+
+            const QString ftype = sampler.value("filter").toString();
+
             if (ftype == "linear")
                 inp.filterType = ShadertoyInput::F_LINEAR;
+            else if (ftype == "mipmap")
+                inp.filterType = ShadertoyInput::F_MIPMAP;
             else
                 inp.filterType = ShadertoyInput::F_NEAREST;
 
-            const QString wtype = in.value("wrap").toString();
-            if (ftype == "repeat")
-                inp.wrapMode = ShadertoyInput::W_REPEAT;
-            else
+            const QString wtype = sampler.value("wrap").toString();
+            if (ftype == "clamp")
                 inp.wrapMode = ShadertoyInput::W_CLAMP;
+            else
+                inp.wrapMode = ShadertoyInput::W_REPEAT;
 
             p.p_inputs_.push_back(inp);
         }
@@ -215,4 +284,17 @@ bool ShadertoyShader::containsString(const QString& s) const
             return true;
 
     return false;
+}
+
+void ShadertoyShader::setRenderPass(size_t index, const ShadertoyRenderPass &pass)
+{
+    // XXX Todo: append or insert
+    if ((int)index >= p_passes_.size())
+        return;
+
+    p_passes_[index] = pass;
+
+    auto rp = p_data_.value("renderpass").toArray();
+    if ((int)index < rp.count())
+        rp[index] = pass.jsonData();
 }

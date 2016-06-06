@@ -46,6 +46,8 @@ struct MainWindow::Private
     void setShader(const QModelIndex&);
     void setShader(const ShadertoyShader&);
 
+    void onShaderEdited();
+
     MainWindow* win;
 
     ShadertoyApi* api;
@@ -139,6 +141,15 @@ void MainWindow::Private::createWidgets()
 
                     lh1->addStretch();
 
+                    auto timeLabel = new QLabel(win);
+                    lh1->addWidget(timeLabel);
+                    connect(renderWidget, &ShadertoyRenderWidget::frameSwapped,
+                            [=]()
+                    {
+                        timeLabel->setText(
+                            QString("%1").arg(renderWidget->playbackTime()));
+                    });
+
                 // shader list
                 tableFilterEdit = new QLineEdit(win);
                 lv1->addWidget(tableFilterEdit);
@@ -162,21 +173,25 @@ void MainWindow::Private::createWidgets()
                         [=](const QModelIndex& idx){ setShader(idx); });
 
             lv1 = new QVBoxLayout();
-            lh->addLayout(lv1);
+            lh->addLayout(lv1, 3);
 
                 auto tab = new QTabWidget(win);
+                tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
                 lv1->addWidget(tab);
 
                     passView = new RenderPassView(win);
+                    connect(passView, &RenderPassView::shaderChanged,
+                            [=](){ onShaderEdited(); });
                     tab->addTab(passView, "source");
 
                     plotView = new TablePlotView(win);
                     plotView->setModel(shaderList);
                     tab->addTab(plotView, "plot");
 
-
+#if 0
                 auto logView = new LogView(win);
                 lv1->addWidget(logView);
+#endif
 
         infoLabel = new QLabel();
         lv->addWidget(infoLabel);
@@ -256,4 +271,9 @@ void MainWindow::Private::downloadUnknownShaders()
 void MainWindow::Private::loadShaders()
 {
     shaderList->loadShaders();
+}
+
+void MainWindow::Private::onShaderEdited()
+{
+    renderWidget->setShader(passView->shader());
 }

@@ -26,6 +26,9 @@ public:
 
 signals:
 
+    /** Something has been changed (source or input settings) */
+    void shaderChanged();
+
 public slots:
 
     void setShader(const ShadertoyShader&);

@@ -71,6 +71,9 @@ struct ShadertoyRenderer::Private
         QOpenGLFramebufferObject* fbo;
         QOpenGLTexture* tex[4];
         QString src[4];
+        bool vFlip[4];
+        QOpenGLTexture::WrapMode wrapMode[4];
+        QOpenGLTexture::Filter filterType[4];
         QImage img[4];
 
         int mvp_matrix,
@@ -312,15 +315,29 @@ bool ShadertoyRenderer::Private::createGl()
         {
             rp.tex[j] = nullptr;
             rp.src[j].clear();
+            rp.vFlip[j] = false;
+            rp.wrapMode[j] = QOpenGLTexture::ClampToEdge;
+            rp.filterType[j] = QOpenGLTexture::Linear;
 
             if (j < pass.numInputs())
             {
                 auto inp = pass.input(j);
-                if (inp.type == ShadertoyInput::T_TEXTURE)
+                //ST_INFO(inp.toString());
+
+                if (inp.type == ShadertoyInput::T_TEXTURE
+                || inp.type == ShadertoyInput::T_CUBEMAP
+                || inp.type == ShadertoyInput::T_BUFFER)
                 {
+                    rp.src[j] = inp.src;
+                    rp.vFlip[j] = inp.vFlip;
+                    if (inp.filterType == ShadertoyInput::F_NEAREST)
+                        rp.filterType[j] = QOpenGLTexture::Nearest;
+                    else if (inp.filterType == ShadertoyInput::F_MIPMAP)
+                        rp.filterType[j] = QOpenGLTexture::LinearMipMapLinear;
+                    if (inp.wrapMode == ShadertoyInput::W_REPEAT)
+                        rp.wrapMode[j] = QOpenGLTexture::Repeat;
                     if (!queried.contains(inp.src))
                     {
-                        rp.src[j] = inp.src;
                         api->getTexture(inp.src);
                         queried.insert(inp.src);
                     }
@@ -497,10 +514,15 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
         if (pass.tex[i] == nullptr
             && !pass.img[i].isNull())
         {
-            pass.tex[i] = new QOpenGLTexture(pass.img[i]);
-            /// @todo correct filter settings and wrap-y
+            pass.tex[i] = new QOpenGLTexture(
+                        pass.vFlip[i] ? pass.img[i].mirrored(false, true)
+                                      : pass.img[i],
+                        pass.filterType[i] == QOpenGLTexture::LinearMipMapLinear
+                        ? QOpenGLTexture::GenerateMipMaps
+                        : QOpenGLTexture::DontGenerateMipMaps);
             pass.tex[i]->setMinMagFilters(
-                QOpenGLTexture::Linear, QOpenGLTexture::LinearMipMapLinear);
+                QOpenGLTexture::Linear, pass.filterType[i]);
+            pass.tex[i]->setWrapMode(pass.wrapMode[i]);
         }
 
         if (!pass.tex[i])

@@ -32,7 +32,8 @@ struct ShadertoyInput
     enum FilterType
     {
         F_NEAREST,
-        F_LINEAR
+        F_LINEAR,
+        F_MIPMAP
     };
     static QString nameForType(FilterType);
 
@@ -53,6 +54,9 @@ struct ShadertoyInput
     QString typeName() const { return nameForType(type); }
     QString filterTypeName() const { return nameForType(filterType); }
     QString wrapModeName() const { return nameForType(wrapMode); }
+
+    /** Description */
+    QString toString() const;
 };
 
 
@@ -85,7 +89,8 @@ public:
 
     // ----- setter -----
 
-    //void setFragmentSource(const QString&);
+    void setFragmentSource(const QString&);
+    void setInput(size_t idx, const ShadertoyInput& );
 
 private:
     friend class ShadertoyShader;
@@ -130,6 +135,8 @@ public:
     // ----- setter -----
 
     bool setJsonData(const QJsonObject& );
+
+    void setRenderPass(size_t index, const ShadertoyRenderPass& pass);
 
 private:
     QJsonObject p_data_;

@@ -22,6 +22,8 @@ public:
     explicit ShadertoyRenderWidget(QWidget *parent = 0);
     ~ShadertoyRenderWidget();
 
+    float playbackTime() const;
+
 signals:
 
 public slots:
