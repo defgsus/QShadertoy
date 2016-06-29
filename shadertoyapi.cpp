@@ -263,21 +263,32 @@ void ShadertoyApi::Private::readShader(QNetworkReply* reply)
 void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
 {
     auto data = reply->readAll();
+
+    const QString
+            src = reply->property("user").toString().mid(7),
+            fn = cacheUrlAssets + src,
+            path = removeFilename(fn);
+    if (!QDir(".").mkpath(path))
+    {
+        ST_ERROR("ShadertoyApi:: could not create directory '"
+                 << path << "'");
+        return;
+    }
+
+    // save locally
+    QFile file(fn);
+    if (!file.open(QFile::WriteOnly))
+    {
+        ST_ERROR("ShadertoyApi:: could not save asset '" << fn << "'");
+        return;
+    }
+    file.write(data);
+    ST_DEBUG2("ShadertoyApi:: saved asset '" << fn << "'");
+
     auto img = loadImage(data);
     if (!img.isNull())
     {
-        const QString
-                src = reply->property("user").toString().mid(7),
-                fn = cacheUrlAssets + src,
-                path = removeFilename(fn);
-        if (!QDir(".").mkpath(path))
-            ST_ERROR("ShadertoyApi:: could not create directory '"
-                     << path << "'");
-        if (!img.save(fn))
-            ST_ERROR("ShadertoyApi:: could not save texture '" << fn << "'")
-        else
-            ST_INFO("ShadertoyApi:: saved texture '" << fn << "'");
-
+        ST_INFO("ShadertoyApi:: received texture '" << fn << "'");
         emit p->textureReceived(src, img);
     }
 }
@@ -304,13 +315,21 @@ bool ShadertoyApi::Private::storeJson(
 
 void ShadertoyApi::getTexture(const QString &src)
 {
-    QImage img = p_->loadImage(src);
-    if (!img.isNull())
+    ST_DEBUG2("ShadertoyApi::getTexture(" << src << ")");
+
+    if (QFileInfo(p_->cacheUrlAssets + src).exists())
     {
-        ST_INFO("ShadertoyApi:: loaded '" << src << "'");
-        emit textureReceived(src, img);
+        QImage img = p_->loadImage(src);
+        if (!img.isNull())
+        {
+            ST_INFO("ShadertoyApi:: loaded '" << src << "'");
+            emit textureReceived(src, img);
+            return;
+        }
+        ST_WARN("Non-images not implemented yet '" << src << "'");
         return;
     }
+
     const QString url = "https://www.shadertoy.com" + src;
 
     ST_DEBUG("ShadertoyApi:: downloading texture '" << url << "'");
@@ -432,7 +451,7 @@ QImage ShadertoyApi::Private::loadImage(QByteArray d)
     QImageReader read(&buf);
     QImage img = read.read();
     if (img.isNull())
-        ST_ERROR("load image failed, " << read.errorString());
+        ST_ERROR("load image failed: " << read.errorString());
     return img;
 }
 

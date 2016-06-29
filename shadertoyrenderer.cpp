@@ -29,7 +29,7 @@
 #include "shadertoyapi.h"
 #include "log.h"
 
-#define STRENDER_ERROR(qstring__) \
+#define ST_RENDER_ERROR(qstring__) \
     errorStr = qstring__; \
     ST_ERROR("ShadertoyRenderer: " << errorStr);
 
@@ -70,6 +70,7 @@ struct ShadertoyRenderer::Private
 
     struct RenderPass
     {
+        ShadertoyRenderPass::Type type;
         QOpenGLShaderProgram* shader;
         QOpenGLFramebufferObject* fbo;
         QOpenGLTexture* tex[4];
@@ -78,6 +79,8 @@ struct ShadertoyRenderer::Private
         QOpenGLTexture::WrapMode wrapMode[4];
         QOpenGLTexture::Filter filterType[4];
         QImage img[4];
+        int outputId,
+            inputId[4];
 
         int mvp_matrix,
             a_position,
@@ -215,13 +218,13 @@ QOpenGLBuffer* ShadertoyRenderer::Private::createBuffer(
     buf->setUsagePattern(QOpenGLBuffer::StaticDraw);
     if (!buf->create())
     {
-        STRENDER_ERROR("Could not create buffer object");
+        ST_RENDER_ERROR("Could not create buffer object");
         delete buf;
         return nullptr;
     }
     if (!buf->bind())
     {
-        STRENDER_ERROR("Could not bind buffer object");
+        ST_RENDER_ERROR("Could not bind buffer object");
         delete buf;
         return nullptr;
     }
@@ -294,7 +297,7 @@ bool ShadertoyRenderer::Private::createGl()
 
     if (!context)
     {
-        STRENDER_ERROR(tr("No context set"));
+        ST_RENDER_ERROR(tr("No context set"));
         return false;
     }
 
@@ -302,7 +305,7 @@ bool ShadertoyRenderer::Private::createGl()
     {
         if (!context->makeCurrent(surface))
         {
-            STRENDER_ERROR(tr("Can not make context current"));
+            ST_RENDER_ERROR(tr("Can not make context current"));
             return false;
         }
     }
@@ -340,7 +343,8 @@ bool ShadertoyRenderer::Private::createGl()
         rpNew.shader = new QOpenGLShaderProgram();
         rpNew.fbo = nullptr;
         if (pass.type() != ShadertoyRenderPass::T_IMAGE)
-            rpNew.fbo = new QOpenGLFramebufferObject(320, 200, GL_TEXTURE_2D);
+            rpNew.fbo = new QOpenGLFramebufferObject(resolution, GL_TEXTURE_2D);
+        rpNew.type = pass.type();
 
         passes.push_back(rpNew);
         RenderPass& rp = passes.back();
@@ -355,30 +359,36 @@ bool ShadertoyRenderer::Private::createGl()
             rp.vFlip[j] = false;
             rp.wrapMode[j] = QOpenGLTexture::ClampToEdge;
             rp.filterType[j] = QOpenGLTexture::Linear;
+            rp.inputId[j] = -1;
 
             if (j < pass.numInputs())
             {
                 auto inp = pass.input(j);
-                //ST_INFO(inp.toString());
+                ST_INFO(inp.toString());
+
+                rp.src[j] = inp.src;
+                rp.vFlip[j] = inp.vFlip;
+                if (inp.filterType == ShadertoyInput::F_NEAREST)
+                    rp.filterType[j] = QOpenGLTexture::Nearest;
+                else if (inp.filterType == ShadertoyInput::F_MIPMAP)
+                    rp.filterType[j] = QOpenGLTexture::LinearMipMapLinear;
+                if (inp.wrapMode == ShadertoyInput::W_REPEAT)
+                    rp.wrapMode[j] = QOpenGLTexture::Repeat;
 
                 if (inp.type == ShadertoyInput::T_TEXTURE
-                || inp.type == ShadertoyInput::T_CUBEMAP
-                || inp.type == ShadertoyInput::T_BUFFER)
-                {
-                    rp.src[j] = inp.src;
-                    rp.vFlip[j] = inp.vFlip;
-                    if (inp.filterType == ShadertoyInput::F_NEAREST)
-                        rp.filterType[j] = QOpenGLTexture::Nearest;
-                    else if (inp.filterType == ShadertoyInput::F_MIPMAP)
-                        rp.filterType[j] = QOpenGLTexture::LinearMipMapLinear;
-                    if (inp.wrapMode == ShadertoyInput::W_REPEAT)
-                        rp.wrapMode[j] = QOpenGLTexture::Repeat;
+                || inp.type == ShadertoyInput::T_CUBEMAP)
+                {                    
                     if (!queried.contains(inp.src))
                     {
                         api->getTexture(inp.src);
                         queried.insert(inp.src);
                     }
                 }
+                else if (inp.type == ShadertoyInput::T_BUFFER)
+                {
+                    rp.inputId[j] = inp.id;
+                }
+
             }
         }
 
@@ -387,7 +397,7 @@ bool ShadertoyRenderer::Private::createGl()
         auto vert = new QOpenGLShader(QOpenGLShader::Vertex, rp.shader);
         if (!vert->compileSourceCode(vertSrc))
         {
-            STRENDER_ERROR(tr("vertex compile failed (pass: %1):\n%2")
+            ST_RENDER_ERROR(tr("vertex compile failed (pass: %1):\n%2")
                            .arg(pass.name())
                            .arg(vert->log())
                            );
@@ -406,7 +416,7 @@ bool ShadertoyRenderer::Private::createGl()
             src += fragSrcFisheye;
         if (!frag->compileSourceCode(src))
         {
-            STRENDER_ERROR(tr("compile failed (pass: %1):\n%2")
+            ST_RENDER_ERROR(tr("compile failed (pass: %1):\n%2")
                            .arg(pass.name())
                            .arg(frag->log())
                            );
@@ -420,7 +430,7 @@ bool ShadertoyRenderer::Private::createGl()
             || !rp.shader->addShader(frag)
             || !rp.shader->link())
         {
-            STRENDER_ERROR(tr("link failed:\n") + rp.shader->log());
+            ST_RENDER_ERROR(tr("link failed:\n") + rp.shader->log());
             destroyGl();
             return false;
         }
@@ -447,6 +457,17 @@ bool ShadertoyRenderer::Private::createGl()
             rp.shader->setUniformValue(rp.iChannel[j], j);
         }
 
+    }
+
+    for (RenderPass& p : passes)
+    {
+        for (int i=0; i<4; ++i)
+        if (p.inputId[i] >= 0)
+        {
+            for (size_t j=0; j<passes.size(); ++j)
+                if (passes[j].outputId == p.inputId[i])
+                    p.inputId[i] = j;
+        }
     }
 
     // -------- create screen quad geometry ----------
@@ -532,13 +553,16 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort)
     auto gl = context->functions();
     if (!gl)
     {
-        STRENDER_ERROR("No OpenGL functions object in context");
+        ST_RENDER_ERROR("No OpenGL functions object in context");
         return false;
     }
 
     gl->glViewport(viewPort.x(), viewPort.y(), viewPort.width(), viewPort.height());
 
-    return drawQuad(passes[0]);
+    bool r = true;
+    for (auto& p : passes)
+        r &= drawQuad(p);
+    return r;
 }
 
 bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
@@ -547,7 +571,7 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     if (!pass.shader->bind())
     {
-        STRENDER_ERROR("Could not bind shader");
+        ST_RENDER_ERROR("Could not bind shader");
         return false;
     }
 
@@ -555,6 +579,20 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     for (int i=0; i<4; ++i)
     {
+        gl->glActiveTexture(GL_TEXTURE0 + i);
+
+        if (pass.inputId[i] >= 0 && (size_t)pass.inputId[i] < passes.size())
+        {
+            RenderPass& opass = passes[pass.inputId[i]];
+            if (opass.fbo)
+            {
+                int texName = opass.fbo->texture();
+                gl->glBindTexture(GL_TEXTURE_2D, texName);
+                ST_DEBUG2(pass.inputId << " bind " << texName);
+            }
+            continue;
+        }
+
         if (pass.tex[i] == nullptr
             && !pass.img[i].isNull())
         {
@@ -572,7 +610,6 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
         if (!pass.tex[i])
             continue;
 
-        gl->glActiveTexture(GL_TEXTURE0 + i);
         pass.tex[i]->bind();
     }
 
@@ -581,12 +618,12 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     if (!bufVert->bind())
     {
-        STRENDER_ERROR("Could not bind vertex buffer");
+        ST_RENDER_ERROR("Could not bind vertex buffer");
         return false;
     }
     if (!bufIdx->bind())
     {
-        STRENDER_ERROR("Could not bind index buffer");
+        ST_RENDER_ERROR("Could not bind index buffer");
         return false;
     }
 
@@ -612,6 +649,19 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     // --- render ---
 
+    if (pass.type == ShadertoyRenderPass::T_BUFFER)
+    {
+        if (!pass.fbo || pass.fbo->size() != resolution)
+        {
+            if (pass.fbo)
+                pass.fbo->release();
+            delete pass.fbo;
+
+            pass.fbo = new QOpenGLFramebufferObject(resolution, GL_TEXTURE_2D);
+        }
+        pass.fbo->bind();
+    }
+
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     gl->glGetError();
@@ -619,8 +669,14 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     auto e = gl->glGetError();
     if (e != 0)
     {
-        STRENDER_ERROR("drawElements failed");
+        ST_RENDER_ERROR("drawElements failed");
         return false;
+    }
+
+    if (pass.type == ShadertoyRenderPass::T_BUFFER)
+    {
+        QOpenGLFramebufferObject::bindDefault();
+        //gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
     return true;

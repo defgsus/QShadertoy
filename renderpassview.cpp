@@ -19,6 +19,7 @@
 #include <QJsonDocument>
 #include <QImage>
 #include <QPixmap>
+#include <QMap>
 
 #include "renderpassview.h"
 #include "shadertoyshader.h"
@@ -28,8 +29,9 @@
 struct RenderPassView::Private
 {
     Private(RenderPassView*p)
-        : p     (p)
-        , api   (new ShadertoyApi(p))
+        : p             (p)
+        , api           (new ShadertoyApi(p))
+        , ignoreChange  (false)
     {
         connect(api, SIGNAL(textureReceived(QString,QImage)),
                 p, SLOT(p_onTexture_(QString,QImage)),
@@ -48,15 +50,19 @@ struct RenderPassView::Private
     void selectTab(int idx);
     void sourceEdited();
     void inputsEdited();
+    QPixmap getPixmap(const QString& src);
 
     RenderPassView* p;
     ShadertoyShader shader;
 
     ShadertoyApi* api;
 
+    bool ignoreChange;
+
     QTabBar* tabBar;
     QPlainTextEdit* textEdit, *jsonView;
     QVector<InputWidget> inputWidgets;
+    QMap<QString, QPixmap> pixmaps;
 };
 
 RenderPassView::RenderPassView(QWidget *parent)
@@ -119,7 +125,7 @@ void RenderPassView::Private::createWidgets()
                         (int)ShadertoyInput::F_MIPMAP);
             connect(iw.filter, static_cast<void(QComboBox::*)(int)>
                     (&QComboBox::currentIndexChanged),
-                        [=](){ inputsEdited(); });
+                        [=](){ if (!ignoreChange) inputsEdited(); });
             lv->addWidget(iw.filter);
 
             iw.wrap = new QComboBox(p);
@@ -131,11 +137,12 @@ void RenderPassView::Private::createWidgets()
                         (int)ShadertoyInput::W_REPEAT);
             connect(iw.wrap, static_cast<void(QComboBox::*)(int)>
                     (&QComboBox::currentIndexChanged),
-                        [=](){ inputsEdited(); });
+                        [=](){ if (!ignoreChange) inputsEdited(); });
             lv->addWidget(iw.wrap);
 
             iw.vFlip = new QCheckBox(tr("v-flip"), p);
-            connect(iw.vFlip, &QCheckBox::toggled, [=]() { inputsEdited(); });
+            connect(iw.vFlip, &QCheckBox::toggled, [=]()
+                { if (!ignoreChange) inputsEdited(); });
             lv->addWidget(iw.vFlip);
 
             inputWidgets.push_back(iw);
@@ -150,7 +157,7 @@ void RenderPassView::Private::createWidgets()
     jsonView = new QPlainTextEdit(p);
     jsonView->setReadOnly(true);
     lv->addWidget(jsonView);
-    jsonView->setVisible(false);
+    //jsonView->setVisible(false);
 }
 
 const ShadertoyShader& RenderPassView::shader() const { return p_->shader; }
@@ -165,6 +172,19 @@ void RenderPassView::setShader(const ShadertoyShader& s)
     {
         auto& rp = p_->shader.renderPass(i);
         p_->tabBar->addTab(rp.name());
+
+        // preload textures
+        for (size_t j=0; j<rp.numInputs(); ++j)
+        {
+            const ShadertoyInput& inp = rp.input(j);
+            if (inp.type == ShadertoyInput::T_TEXTURE
+              || inp.type == ShadertoyInput::T_CUBEMAP
+              || inp.type == ShadertoyInput::T_BUFFER)
+            {
+                p_->getPixmap(inp.src);
+            }
+        }
+
     }
 
     p_->tabBar->setCurrentIndex(0);
@@ -173,6 +193,8 @@ void RenderPassView::setShader(const ShadertoyShader& s)
 
 void RenderPassView::Private::selectTab(int idx)
 {
+    ignoreChange = true;
+
     if (idx < 0 || size_t(idx) >= shader.numRenderPasses())
     {
         textEdit->clear();
@@ -185,10 +207,11 @@ void RenderPassView::Private::selectTab(int idx)
             iw.wrap->setEnabled(false);
             iw.vFlip->setEnabled(false);
         }
+        ignoreChange = false;
         return;
     }
 
-    auto& rp = shader.renderPass(idx);
+    auto rp = shader.renderPass(idx);
     textEdit->setPlainText(rp.fragmentSource());
     jsonView->setPlainText(
                 QString::fromUtf8(QJsonDocument(rp.jsonData()).toJson()));
@@ -226,20 +249,34 @@ void RenderPassView::Private::selectTab(int idx)
               || inp.type == ShadertoyInput::T_CUBEMAP
               || inp.type == ShadertoyInput::T_BUFFER)
             {
-                api->getTexture(inp.src);
+                iw.imgLabel->setPixmap( getPixmap(inp.src) );
             }
         }
     }
+    ignoreChange = false;
+}
+
+QPixmap RenderPassView::Private::getPixmap(const QString& src)
+{
+    ST_DEBUG2("RenderPassView::getPixmap(" << src << ") "
+              "present=" << pixmaps.contains(src));
+
+    if (pixmaps.contains(src))
+        return pixmaps[src];
+
+    api->getTexture(src);
+    return QPixmap(64, 64);
 }
 
 void RenderPassView::p_onTexture_(const QString &src, const QImage &img)
 {
+    p_->pixmaps.insert(src, QPixmap::fromImage(img.scaled(64,64)));
+
     for (size_t i=0; i<4; ++i)
     {
         Private::InputWidget& iw = p_->inputWidgets[i];
         if (iw.src == src)
-            iw.imgLabel->setPixmap(QPixmap::fromImage(
-                                       img.scaled(64,64)));
+            iw.imgLabel->setPixmap(p_->pixmaps[src]);
     }
 }
 

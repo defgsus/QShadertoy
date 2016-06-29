@@ -13,7 +13,7 @@ TEMPLATE = app
 
 CONFIG += c++11
 
-CONFIG(release, release) {
+CONFIG(release, debug|release) {
     DEFINES += NDEBUG
 }
 

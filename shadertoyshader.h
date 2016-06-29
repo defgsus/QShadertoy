@@ -80,6 +80,7 @@ public:
     Type type() const { return p_type_; }
     QString typeName() const { return nameForType(p_type_); }
     QString name() const { return p_name_; }
+    int outputId() const { return p_outputId_; }
 
     size_t numInputs() const { return p_inputs_.size(); }
     const ShadertoyInput& input(size_t idx) const { return p_inputs_[idx]; }
@@ -97,6 +98,7 @@ private:
     QJsonObject p_data_;
     QString p_code_, p_name_;
     Type p_type_;
+    int p_outputId_;
     QVector<ShadertoyInput> p_inputs_;
 };
 

@@ -198,6 +198,12 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
             name = p.typeName();
         p.p_name_ = name;
 
+        auto outputs = p.p_data_.value("outputs").toArray();
+        if (outputs.isEmpty())
+            p.p_outputId_ = -1;
+        else
+            p.p_outputId_ = outputs[0].toObject().value("id").toInt();
+
         auto ins = p.p_data_.value("inputs").toArray();
         for (const QJsonValue& inv : ins)
         {
