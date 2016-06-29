@@ -29,8 +29,10 @@
 #include <QBuffer>
 #include <QByteArray>
 #include <QRegExp>
+#include <QThread>
 
 #include "shadertoyapi.h"
+#include "shadertoyapiloaderthread.h"
 #include "shadertoyshader.h"
 #include "settings.h"
 #include "log.h"
@@ -40,15 +42,19 @@ struct ShadertoyApi::Private
     Private(ShadertoyApi* p)
         : p         (p)
         , net       (nullptr)
+        , loadThread(nullptr)
         , loop      (nullptr)
     { }
 
-    void postRequest(const QString& url, std::function<void(QNetworkReply*)>);
+    void postRequest(const QString& url, const QVariant& userData);
     void readShaderList(QNetworkReply* reply);
     void readShader(QNetworkReply* reply);
+    void readTexture(QNetworkReply* reply);
+
     bool storeJson(const QString& filename, const QJsonObject& data);
     QImage loadImage(QByteArray);
     QImage loadImage(const QString& src);
+    bool loadShader(const QString& id);
 
     static QString removeFilename(const QString&);
 
@@ -60,10 +66,15 @@ struct ShadertoyApi::Private
         cacheUrlShader, cacheUrlAssets;
 
     QStringList shaderIds, tempShaderIds;
-    ShadertoyShader shader;
+    ShadertoyApiLoaderThread* loadThread;
+    QMap<QString, ShadertoyShader> shaderMap;
 
     QEventLoop* loop;
 };
+
+namespace {
+
+}
 
 ShadertoyApi::ShadertoyApi(QObject* parent)
     : QObject       (parent)
@@ -97,40 +108,58 @@ QString ShadertoyApi::shaderIdToFilename(const QString& id)
 }
 
 const QStringList& ShadertoyApi::shaderIds() const { return p_->shaderIds; }
-const ShadertoyShader& ShadertoyApi::shader() const { return p_->shader; }
+bool ShadertoyApi::hasShader(const QString& id) const
+{
+    return p_->shaderMap.contains(id);
+}
+ShadertoyShader ShadertoyApi::getShader(const QString& id) const
+{
+    auto i = p_->shaderMap.find(id);
+    return i != p_->shaderMap.end() ? i.value() : ShadertoyShader(id);
+}
 
 void ShadertoyApi::downloadShaderList()
 {
-    p_->postRequest(p_->apiUrl + "shaders?key=" + p_->appKey,
-                    [=](QNetworkReply*r) { p_->readShaderList(r); });
+    p_->postRequest(p_->apiUrl + "shaders?key=" + p_->appKey, "shaderlist");
 }
 
 void ShadertoyApi::downloadShader(const QString &id)
 {
     p_->postRequest(p_->apiUrl + "shaders/" + id + "?key=" + p_->appKey,
-                    [=](QNetworkReply*r) { p_->readShader(r); });
-
+                    "shader");
 }
 
 void ShadertoyApi::Private::postRequest(
-        const QString& url, std::function<void(QNetworkReply*)> foo)
+        const QString& url, const QVariant& userData)
 {
     ST_DEBUG2("ShadertoyApi::postRequest('" << url << "')");
 
     if (!net)
     {
         net = new QNetworkAccessManager(p);
+        connect(net, SIGNAL(finished(QNetworkReply*)),
+                p, SLOT(p_onReply_(QNetworkReply*)), Qt::QueuedConnection);
     }
 
     auto r = QNetworkRequest(QUrl(url));
 
     auto reply = net->get(r);
-    connect(reply, &QNetworkReply::finished, [=]()
-    {
-        foo(reply);
-        reply->deleteLater();
-    });
+    reply->setProperty("user", userData);
 }
+
+void ShadertoyApi::p_onReply_(QNetworkReply* reply)
+{
+    const auto user = reply->property("user").toString();
+    if (user == "shader")
+        p_->readShader(reply);
+    else if (user == "shaderlist")
+        p_->readShaderList(reply);
+    else if (user.startsWith("texture"))
+        p_->readTexture(reply);
+
+    reply->deleteLater();
+}
+
 
 void ShadertoyApi::Private::readShaderList(QNetworkReply* reply)
 {
@@ -149,6 +178,7 @@ void ShadertoyApi::Private::readShaderList(QNetworkReply* reply)
     }
 
     emit p->shaderListReceived();
+    emit p->shaderListChanged();
 }
 
 void ShadertoyApi::Private::readShader(QNetworkReply* reply)
@@ -160,13 +190,16 @@ void ShadertoyApi::Private::readShader(QNetworkReply* reply)
     auto json = QJsonDocument::fromJson(all).object();
     auto obj = json.value("Shader").toObject();
 
+    ShadertoyShader shader;
     shader.setJsonData(obj);
 
     if (shader.isValid())
     {
         storeJson(shaderIdToFilename(shader.info().id) + ".json",
                   shader.jsonData());
-        emit p->shaderReceived();
+
+        emit p->shaderReceived(shader.info().id);
+        emit p->shaderListChanged();
     }
 }
 
@@ -186,6 +219,24 @@ bool ShadertoyApi::Private::storeJson(
 
     return true;
 }
+
+
+void ShadertoyApi::getTexture(const QString &src)
+{
+    QImage img = p_->loadImage(src);
+    if (!img.isNull())
+    {
+        ST_INFO("ShadertoyApi:: loaded '" << src << "'");
+        emit textureReceived(src, img);
+        return;
+    }
+    const QString url = "https://www.shadertoy.com" + src;
+
+    ST_DEBUG("ShadertoyApi:: downloading texture '" << url << "'");
+    p_->postRequest(url, "texture" + src);
+}
+
+
 
 bool ShadertoyApi::loadShaderList()
 {
@@ -210,19 +261,77 @@ bool ShadertoyApi::loadShaderList()
     return !p_->shaderIds.isEmpty();
 }
 
+void ShadertoyApi::loadAllShaders()
+{
+    ST_DEBUG2("ShadertoyApi::loadAllShaders()");
+
+    for (auto& id : p_->shaderIds)
+        p_->loadShader(id);
+
+    emit shaderListChanged();
+
+    /*
+    if (p_->loadThread)
+        return;
+
+    QStringList fns;
+    for (auto& id : p_->shaderIds)
+        fns << p_->cacheUrlShader + shaderIdToFilename(id);
+
+    p_->loadThread = new ShadertoyApiLoaderThread(this);
+    p_->loadThread->setFilelist(fns);
+    connect(p_->loadThread, SIGNAL(shaderLoaded(ShadertoyShader)),
+            this, SLOT(p_onShaderLoaded_()), Qt::QueuedConnection);
+
+    p_->loadThread->start();
+    */
+}
+
 bool ShadertoyApi::loadShader(const QString& id)
 {
     ST_DEBUG2("ShadertoyApi::loadShader('" << id << "')");
 
-    QFile file(p_->cacheUrlShader + shaderIdToFilename(id) + ".json");
-    if (!file.open(QFile::Text | QFile::ReadOnly))
+    if (!p_->loadShader(id))
         return false;
+
+    emit shaderListChanged();
+    return true;
+}
+
+bool ShadertoyApi::Private::loadShader(const QString& id)
+{
+    ST_DEBUG2("ShadertoyApi::Private::loadShader('" << id << "')");
+
+    QString fn = cacheUrlShader + shaderIdToFilename(id) + ".json";
+
+    if (!QFileInfo(id).exists(fn))
+    {
+        ST_DEBUG2("Shader does not exist '" << fn << "'");
+        return false;
+    }
+
+    QFile file(fn);
+    if (!file.open(QFile::Text | QFile::ReadOnly))
+    {
+        ST_ERROR("Could not open shader file '" << file.fileName() << "', "
+                 << file.errorString());
+        return false;
+    }
 
     auto data = file.readAll();
     auto obj = QJsonDocument::fromJson(data).object();
-    p_->shader.setJsonData(obj);
 
-    return p_->shader.isValid();
+    ShadertoyShader shader;
+    if (!shader.setJsonData(obj) || !shader.isValid())
+    {
+        ST_ERROR("Error parsing json file '" << file.fileName() << "'");
+        return false;
+    }
+
+    ST_DEBUG2("ShadertoyApi: insert shader '" << shader.info().id << "'");
+
+    shaderMap[shader.info().id] = shader;
+    return shader.isValid();
 }
 
 
@@ -237,28 +346,8 @@ void ShadertoyApi::downloadAll()
     downloadShaderList();
 }
 
-void ShadertoyApi::p_onList_()
-{
-    if (!p_->shaderIds.isEmpty())
-    {
-        p_->tempShaderIds = p_->shaderIds;
-        downloadShader(p_->tempShaderIds[0]);
-    }
-}
 
-void ShadertoyApi::p_onShader_()
-{
-    ST_DEBUG("ShadertoyApi:: received shader "
-             << (p_->shaderIds.size() - p_->tempShaderIds.size())
-             << "/" << p_->shaderIds.size()
-             << " " << p_->shader.info().name);
 
-    p_->tempShaderIds.pop_front();
-    if (!p_->tempShaderIds.isEmpty())
-    {
-        downloadShader(p_->tempShaderIds[0]);
-    }
-}
 
 QString ShadertoyApi::Private::removeFilename(const QString& fn)
 {
@@ -268,36 +357,27 @@ QString ShadertoyApi::Private::removeFilename(const QString& fn)
     return fn;
 }
 
-void ShadertoyApi::getTexture(const QString &src)
+
+void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
 {
-    QImage img = p_->loadImage(src);
+    auto data = reply->readAll();
+    auto img = loadImage(data);
     if (!img.isNull())
     {
-        ST_INFO("ShadertoyApi:: loaded '" << src << "'");
-        emit textureReceived(src, img);
-        return;
-    }
-    const QString url = "https://www.shadertoy.com" + src;
+        const QString
+                src = reply->property("user").toString().mid(7),
+                fn = cacheUrlAssets + src,
+                path = removeFilename(fn);
+        if (!QDir(".").mkpath(path))
+            ST_ERROR("ShadertoyApi:: could not create directory '"
+                     << path << "'");
+        if (!img.save(fn))
+            ST_ERROR("ShadertoyApi:: could not save texture '" << fn << "'")
+        else
+            ST_INFO("ShadertoyApi:: saved texture '" << fn << "'");
 
-    ST_DEBUG("ShadertoyApi:: downloading texture '" << url << "'");
-    p_->postRequest(url, [=](QNetworkReply*r)
-    {
-        auto data = r->readAll();
-        auto img = p_->loadImage(data);
-        if (!img.isNull())
-        {
-            const QString fn = p_->cacheUrlAssets + src,
-                          path = p_->removeFilename(fn);
-            if (!QDir(".").mkpath(path))
-                ST_ERROR("ShadertoyApi:: could not create directory '"
-                         << path << "'");
-            if (!img.save(fn))
-                ST_ERROR("ShadertoyApi:: could not save texture '" << fn << "'")
-            else
-                ST_INFO("ShadertoyApi:: saved texture '" << fn << "'");
-            emit textureReceived(src, img);
-        }
-    });
+        emit p->textureReceived(src, img);
+    }
 }
 
 QImage ShadertoyApi::Private::loadImage(QByteArray d)

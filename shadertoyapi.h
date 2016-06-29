@@ -13,6 +13,7 @@
 
 #include <QObject>
 
+class QNetworkReply;
 class ShadertoyShader;
 
 class ShadertoyApi : public QObject
@@ -22,16 +23,18 @@ public:
     ShadertoyApi(QObject* parent = nullptr);
     ~ShadertoyApi();
 
-
     const QStringList& shaderIds() const;
-    const ShadertoyShader& shader() const;
+    bool hasShader(const QString& id) const;
+    ShadertoyShader getShader(const QString& id) const;
 
     /** Converts shader id to case-insensitive filename */
     static QString shaderIdToFilename(const QString& id);
+
 signals:
 
     void shaderListReceived();
-    void shaderReceived();
+    void shaderReceived(const QString& id);
+    void shaderListChanged();
 
     void textureReceived(const QString& src, const QImage&);
 
@@ -50,12 +53,13 @@ public slots:
     // ---- offline api ----
 
     bool loadShaderList();
+    /** Tries to load all shaders in the list from cache */
+    void loadAllShaders();
     bool loadShader(const QString& id);
 
 private slots:
 
-    void p_onList_();
-    void p_onShader_();
+    void p_onReply_(QNetworkReply*);
 
 private:
     struct Private;

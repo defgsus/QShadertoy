@@ -18,6 +18,7 @@
 #include <QToolButton>
 #include <QLabel>
 #include <QLayout>
+#include <QComboBox>
 
 #include "shadertoyrenderwidget.h"
 #include "shadertoyrenderer.h"
@@ -30,6 +31,7 @@ struct ShadertoyRenderWidget::Private
         , render        (nullptr)
         , hasNewShader  (true)
         , mouseKeys     (0)
+        , projectMode   (ShadertoyRenderer::P_RECT)
         , isPlaying     (false)
         , pauseTime     (0.f)
         , timeOffset    (0.f)
@@ -44,6 +46,7 @@ struct ShadertoyRenderWidget::Private
 
     QPoint mousePos;
     int mouseKeys;
+    ShadertoyRenderer::Projection projectMode;
 
     bool isPlaying;
     int frame;
@@ -51,7 +54,6 @@ struct ShadertoyRenderWidget::Private
     QTime timeMessure;
     float pauseTime, timeOffset;
 
-    QToolButton* butProj;
 };
 
 
@@ -195,9 +197,7 @@ void ShadertoyRenderWidget::paintGL()
     p_->hasNewShader = false;
 
     p_->render->setResolution(size());
-    p_->render->setProjection(p_->butProj->isChecked()
-                              ? ShadertoyRenderer::P_FISHEYE
-                              : ShadertoyRenderer::P_RECT);
+    p_->render->setProjection(p_->projectMode);
     p_->render->setGlobalTime(playbackTime());
     p_->render->setFrameNumber(p_->frame++);
     p_->render->setMouse(p_->mousePos, p_->mouseKeys & Qt::LeftButton,
@@ -246,12 +246,16 @@ QWidget* ShadertoyRenderWidget::createPlaybar(QWidget*parent)
 
         lh->addStretch();
 
-        but = p_->butProj = new QToolButton(container);
-        but->setText("VR");
-        but->setCheckable(true);
-        lh->addWidget(but);
-        connect(but, &QToolButton::clicked, [=]()
+        auto cb = new QComboBox(container);
+        cb->addItem(tr("rectangular"), (int)ShadertoyRenderer::P_RECT);
+        cb->addItem(tr("fisheye"), (int)ShadertoyRenderer::P_FISHEYE);
+        cb->addItem(tr("cross-eye"), (int)ShadertoyRenderer::P_CROSS_EYE);
+        lh->addWidget(cb);
+        connect(cb, static_cast<void(QComboBox::*)(int)>
+                        (&QComboBox::currentIndexChanged), [=]()
         {
+            p_->projectMode = (ShadertoyRenderer::Projection)
+                    cb->currentData().toInt();
             update();
         });
 

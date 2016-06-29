@@ -82,11 +82,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     p_->setShader(ShadertoyShader());
 
+    /*
     connect(p_->api, SIGNAL(shaderListReceived()),
             this, SLOT(p_onShaderList_()), Qt::QueuedConnection);
-    connect(p_->api, SIGNAL(shaderReceived()),
-            this, SLOT(p_onShader_()), Qt::QueuedConnection);
-
+    connect(p_->api, SIGNAL(shaderReceived(QString)),
+            this, SLOT(p_onShader_(QString)), Qt::QueuedConnection);
+    */
 }
 
 MainWindow::~MainWindow()
@@ -133,7 +134,7 @@ void MainWindow::Private::createWidgets()
                 shaderSortModel->setSourceModel(shaderList);
                 shaderTable->setModel(shaderSortModel);
 
-                connect(shaderTable, &QTableView::doubleClicked,
+                connect(shaderTable, &QTableView::activated,
                         [=](const QModelIndex& idx){ setShader(idx); });
 
             lv1 = new QVBoxLayout();
@@ -167,6 +168,9 @@ void MainWindow::Private::createMenu()
 
     auto a = menu->addAction(tr("Download shader list"));
     connect(a, &QAction::triggered, [=](){ api->downloadShaderList(); });
+
+    a = menu->addAction(tr("Load shaders"));
+    connect(a, &QAction::triggered, [=](){ api->loadAllShaders(); });
 
     a = menu->addAction(tr("Download shaders"));
     connect(a, &QAction::triggered, [=](){ downloadUnknownShaders(); });
@@ -202,12 +206,15 @@ void MainWindow::Private::setShader(const ShadertoyShader& s)
 
 void MainWindow::p_onShaderList_()
 {
+    /*
     const auto ids = p_->api->shaderIds();
     p_->shaderList->initWithIds(ids);
+    */
 }
 
-void MainWindow::p_onShader_()
+void MainWindow::p_onShader_(const QString& id)
 {
+    /*
     auto s = p_->api->shader();
     p_->shaderList->setShader(s.info().id, s);
 
@@ -218,7 +225,7 @@ void MainWindow::p_onShader_()
         ++p_->curDownShader;
     if (p_->curDownShader < ids.size())
         p_->api->downloadShader(ids[p_->curDownShader]);
-
+    */
 }
 
 void MainWindow::Private::downloadUnknownShaders()

@@ -14,17 +14,26 @@
 #include "shaderlistmodel.h"
 #include "shadertoyapi.h"
 #include "shadertoyshader.h"
-
+#include "log.h"
 
 struct ShaderListModel::Private
 {
     Private(ShaderListModel* p)
         : p     (p)
-    { }
+        , api   (new ShadertoyApi(p))
+    {
+        api->loadShaderList();
+        connect(api, &ShadertoyApi::shaderListChanged, [=]()
+        {
+            copyListFromApi();
+        });
+    }
+
+    void copyListFromApi();
 
     ShaderListModel* p;
+    ShadertoyApi* api;
     QList<ShadertoyShader> shaders;
-    QStringList shaderIds;
     QStringList headerNames;
 };
 
@@ -52,43 +61,32 @@ ShaderListModel::~ShaderListModel()
     delete p_;
 }
 
-const QStringList& ShaderListModel::shaderIds() const { return p_->shaderIds; }
+const QStringList& ShaderListModel::shaderIds() const { return p_->api->shaderIds(); }
+
+void ShaderListModel::Private::copyListFromApi()
+{
+    ST_DEBUG2("ShaderListModel::copyListFromApi()");
+
+    p->beginResetModel();
+
+    shaders.clear();
+    for (auto id : api->shaderIds())
+        shaders << api->getShader(id);
+
+    p->endResetModel();
+}
 
 void ShaderListModel::loadShaders()
 {
-    beginResetModel();
-
-    p_->shaders.clear();
-    ShadertoyApi api;
-    if (api.loadShaderList())
-    {
-        p_->shaderIds = api.shaderIds();
-        for (const QString& id : p_->shaderIds)
-            if (api.loadShader(id))
-                p_->shaders << api.shader();
-            else
-                p_->shaders << ShadertoyShader();
-    }
-
-    endResetModel();
+    p_->api->loadAllShaders();
 }
 
 
-void ShaderListModel::initWithIds(const QStringList& ids)
-{
-    beginResetModel();
-
-    p_->shaderIds = ids;
-    p_->shaders.clear();
-    for (int i=0; i<p_->shaderIds.size(); ++i)
-        p_->shaders << ShadertoyShader();
-
-    endResetModel();
-}
 
 bool ShaderListModel::setShader(const QString &id, const ShadertoyShader &s)
 {
-    int idx = p_->shaderIds.indexOf(id);
+    /*
+    int idx = p_->shader.indexOf(id);
     if (idx < 0)
         return false;
 
@@ -96,6 +94,7 @@ bool ShaderListModel::setShader(const QString &id, const ShadertoyShader &s)
     p_->shaders[idx] = s;
     endResetModel();
     return true;
+    */
 }
 
 ShadertoyShader ShaderListModel::getShader(const QModelIndex& idx) const
@@ -122,7 +121,7 @@ int ShaderListModel::rowCount(const QModelIndex &parent) const
 
 QVariant ShaderListModel::data(const QModelIndex &index, int role) const
 {
-    if (index.row() < 0 || index.row() >= p_->shaderIds.size())
+    if (index.row() < 0 || index.row() >= p_->shaders.size())
         return QVariant();
 
     const ShadertoyShader shader = p_->shaders[index.row()];
@@ -133,7 +132,7 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
             return QColor(255,128,128);
         if (role == Qt::DisplayRole || role == Qt::EditRole)
             if (index.column() == C_ID)
-                return p_->shaderIds[index.row()];
+                return p_->shaders[index.row()].info().id;
         return QVariant();
     }
 

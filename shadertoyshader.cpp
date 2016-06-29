@@ -124,9 +124,9 @@ void ShadertoyRenderPass::setInput(size_t idx, const ShadertoyInput& inp)
 
 
 
-ShadertoyShader::ShadertoyShader()
+ShadertoyShader::ShadertoyShader(const QString& id)
 {
-
+    p_info_.id = id;
 }
 
 bool ShadertoyShader::setJsonData(const QJsonObject& o)

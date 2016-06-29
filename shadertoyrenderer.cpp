@@ -49,6 +49,8 @@ struct ShadertoyRenderer::Private
         , dateData      (0.f, 0.f, 0.f, 0.f)
         , globalTime    (0.f)
         , timeDelta     (0.f)
+        , eyeDistance   (0.1f)
+        , eyeRotation   (0.0f)
         , frameNumber   (0)
         , needsRecompile(true)
     {
@@ -88,7 +90,8 @@ struct ShadertoyRenderer::Private
             iMouse,
             iDate,
             iSampleRate,
-            iChannel[4];
+            iChannel[4],
+            iEyeMod;
     };
 
     const static GLfloat quadVertices[];
@@ -108,7 +111,8 @@ struct ShadertoyRenderer::Private
     QOpenGLBuffer* bufVert, *bufIdx;
     QMatrix4x4 projection;
     QVector4D mouseData, dateData;
-    float globalTime, timeDelta;
+    float globalTime, timeDelta,
+        eyeDistance, eyeRotation;
     int frameNumber;
 
     ShadertoyShader shadertoy;
@@ -185,8 +189,12 @@ void ShadertoyRenderer::setMouse(const QPoint &pos, bool leftKey, bool rightKey)
 void ShadertoyRenderer::setDate(const QDateTime& dt)
 {
     auto d = dt.date();
-    p_->dateData = QVector4D(d.year(), d.month(), d.day(), dt.time().second());
+    p_->dateData = QVector4D(d.year(), d.month(), d.day(),
+            dt.time().second() + float(dt.time().msec()) / 1000.f);
 }
+
+void ShadertoyRenderer::setEyeDistance(float d) { p_->eyeDistance = d; }
+void ShadertoyRenderer::setEyeRotation(float d) { p_->eyeRotation = d; }
 
 void ShadertoyRenderer::setGlobalTime(float ti) { p_->globalTime = ti; }
 void ShadertoyRenderer::setTimeDelta(float ti) { p_->timeDelta = ti; }
@@ -253,19 +261,32 @@ bool ShadertoyRenderer::Private::createGl()
 "uniform vec4  iMouse;                   // xy = pos in pixels, zw = buttons\n"
 "uniform vec4  iDate;                    // year, month, day, time in seconds\n"
 "uniform float iSampleRate;              // sound sampling rate in Hertz\n"
+"uniform vec4  _ST_eyeMod_;\n"
                 , fragSrc2 =
 "void main()\n"
 "{\n"
 "    mainImage(gl_FragColor, gl_FragCoord.xy);\n"
 //"    gl_FragColor = vec4(gl_FragCoord.xy / iResolution.xy, 0,1);\n"
 "}\n"
-            , fragSrcVr =
+            , fragSrcFisheye =
 "void main()\n"
 "{\n"
 "    vec2 uv = (gl_FragCoord.xy - .5*iResolution.xy) / iResolution.y * 2.;\n"
 "    vec3 ro = vec3(0.);\n"
 "    vec3 rd = normalize(vec3(uv, -2. + length(uv)));\n"
 "    mainVR(gl_FragColor, gl_FragCoord.xy, ro, rd);\n"
+"}\n"
+            , fragSrcCrossEye =
+"void main()\n"
+"{\n"
+"    vec2 _res_ = iResolution.xy * vec2(.5, 1.);\n"
+"    float _side_ = gl_FragCoord.x < _res_.x ? -1. : 1.;\n"
+"    vec2 uv = (vec2(mod(gl_FragCoord.x, _res_.x), gl_FragCoord.y) - .5*_res_.xy) / _res_.y * 2.;\n"
+"\n"
+"    vec3 ro = vec3(-_side_*_ST_eyeMod_.x, 0., 0.);\n"
+"    vec3 rd = normalize(vec3(uv,-1.));\n"
+"\n"
+"    mainVR(gl_FragColor, gl_FragCoord, ro, rd);\n"
 "}\n"
     ;
 
@@ -379,8 +400,10 @@ bool ShadertoyRenderer::Private::createGl()
             fragSrc1 + fragSrc1b + pass.fragmentSource();
         if (projectionMode == P_RECT)
             src += fragSrc2;
+        else if (projectionMode == P_CROSS_EYE)
+            src += fragSrcCrossEye;
         else
-            src += fragSrcVr;
+            src += fragSrcFisheye;
         if (!frag->compileSourceCode(src))
         {
             STRENDER_ERROR(tr("compile failed (pass: %1):\n%2")
@@ -416,6 +439,7 @@ bool ShadertoyRenderer::Private::createGl()
         rp.iMouse = rp.shader->uniformLocation("iMouse");
         rp.iDate = rp.shader->uniformLocation("iDate");
         rp.iSampleRate = rp.shader->uniformLocation("iSampleRate");
+        rp.iEyeMod = rp.shader->uniformLocation("_ST_eyeMod_");
         for (int j=0; j<4; ++j)
         {
             rp.iChannel[j] = rp.shader->uniformLocation(
@@ -578,6 +602,8 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     pass.shader->setUniformValue(pass.iFrame, frameNumber);
     pass.shader->setUniformValue(pass.iTimeDelta, timeDelta);
     pass.shader->setUniformValue(pass.iDate, dateData);
+    pass.shader->setUniformValue(pass.iEyeMod,
+                                 eyeDistance, eyeRotation);
 
     // -- bind vertex array --
 

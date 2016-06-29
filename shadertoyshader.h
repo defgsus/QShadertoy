@@ -117,7 +117,7 @@ struct ShadertoyShaderInfo
 class ShadertoyShader
 {
 public:
-    ShadertoyShader();
+    ShadertoyShader(const QString& id = "");
 
     // ----- getter -----
 

@@ -48,7 +48,6 @@ public slots:
 
     void loadShaders();
 
-    void initWithIds(const QStringList& ids);
     bool setShader(const QString& id, const ShadertoyShader& s);
 
 public:

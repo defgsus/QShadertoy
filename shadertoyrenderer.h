@@ -24,7 +24,8 @@ public:
     enum Projection
     {
         P_RECT,
-        P_FISHEYE
+        P_FISHEYE,
+        P_CROSS_EYE
     };
 
     explicit ShadertoyRenderer(QObject *parent = 0);
@@ -63,6 +64,8 @@ public slots:
     void setFrameNumber(int);
     void setTimeDelta(float);
     void setDate(const QDateTime&);
+    void setEyeDistance(float);
+    void setEyeRotation(float);
 
     /** Renders the shader to the given gl context.
         This might compile the shader if needed.

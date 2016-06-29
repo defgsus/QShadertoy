@@ -24,7 +24,7 @@ public:
 private slots:
 
     void p_onShaderList_();
-    void p_onShader_();
+    void p_onShader_(const QString& id);
 
 private:
     struct Private;
