@@ -21,10 +21,11 @@ public:
     MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-private slots:
+protected:
 
-    void p_onShaderList_();
-    void p_onShader_(const QString& id);
+    void showEvent(QShowEvent*) override;
+
+private slots:
 
 private:
     struct Private;

@@ -13,6 +13,10 @@ TEMPLATE = app
 
 CONFIG += c++11
 
+CONFIG(release, release) {
+    DEFINES += NDEBUG
+}
+
 SOURCES += main.cpp\
         mainwindow.cpp \
     shadertoyapi.cpp \

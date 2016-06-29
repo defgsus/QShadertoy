@@ -61,6 +61,8 @@ ShaderListModel::~ShaderListModel()
     delete p_;
 }
 
+ShadertoyApi* ShaderListModel::api() { return p_->api; }
+
 const QStringList& ShaderListModel::shaderIds() const { return p_->api->shaderIds(); }
 
 void ShaderListModel::Private::copyListFromApi()
@@ -76,26 +78,6 @@ void ShaderListModel::Private::copyListFromApi()
     p->endResetModel();
 }
 
-void ShaderListModel::loadShaders()
-{
-    p_->api->loadAllShaders();
-}
-
-
-
-bool ShaderListModel::setShader(const QString &id, const ShadertoyShader &s)
-{
-    /*
-    int idx = p_->shader.indexOf(id);
-    if (idx < 0)
-        return false;
-
-    beginResetModel();
-    p_->shaders[idx] = s;
-    endResetModel();
-    return true;
-    */
-}
 
 ShadertoyShader ShaderListModel::getShader(const QModelIndex& idx) const
 {

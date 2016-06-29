@@ -14,12 +14,17 @@
 #include <QAbstractTableModel>
 
 class ShadertoyShader;
+class ShadertoyApi;
 
+/** Model to hold a list of Shaders as table.
+    Uses ShadertoyApi internally.
+    */
 class ShaderListModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
 
+    /** The different columns in the table */
     enum Columns
     {
         C_ID,
@@ -35,28 +40,27 @@ public:
         C_FLAGS
     };
 
-
     explicit ShaderListModel(QObject *parent = 0);
     ~ShaderListModel();
 
     const QStringList& shaderIds() const;
 
+    /** Shader for index */
     ShadertoyShader getShader(const QModelIndex&) const;
+    /** Shader for row, no error checking */
     const ShadertoyShader& getShader(int row) const;
 
-public slots:
-
-    void loadShaders();
-
-    bool setShader(const QString& id, const ShadertoyShader& s);
+    ShadertoyApi* api();
 
 public:
+    // --- QAbstractTableModel interface ---
 
     int columnCount(const QModelIndex &parent) const override;
     int rowCount(const QModelIndex &parent) const override;
     QVariant data(const QModelIndex &index, int role) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role) const override;
+
 private:
     struct Private;
     Private* p_;

@@ -50,7 +50,7 @@ struct Log
     /** Implementation of macro stream logging */
     #define ST_LOG_IMPL_(level__, prefix_unused__, arg__) \
       { ::QString s__; QTextStream ts__(&s__); ts__ << arg__ << "\n"; \
-        ::MCW::Log::print(s__, level__); }
+        ::Log::print(s__, level__); }
 #else
     #define ST_LOG_IMPL_(level__, prefix__, arg__) \
       { ::QString s__; QTextStream ts__(&s__); \

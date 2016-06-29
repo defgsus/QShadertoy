@@ -19,6 +19,7 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QProgressBar>
 
 #include "mainwindow.h"
 #include "shadertoyapi.h"
@@ -35,12 +36,10 @@ struct MainWindow::Private
 {
     Private(MainWindow* p)
         : win       (p)
-        , api       (new ShadertoyApi(win))
     { }
 
     void createWidgets();
     void createMenu();
-    void downloadUnknownShaders();
     void loadShaders();
 
     void setShader(const QModelIndex&);
@@ -50,7 +49,6 @@ struct MainWindow::Private
 
     MainWindow* win;
 
-    ShadertoyApi* api;
     ShaderListModel* shaderList;
     ShaderSortModel* shaderSortModel;
 
@@ -62,7 +60,7 @@ struct MainWindow::Private
     RenderPassView* passView;
     TablePlotView* plotView;
     QLabel * infoLabel;
-
+    QProgressBar* progressBar;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -78,7 +76,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     //p_->api->getShaderList();
     //p_->downloadAllShaders();
-    p_->loadShaders();
+    //p_->loadShaders();
 
     p_->setShader(ShadertoyShader());
 
@@ -95,6 +93,11 @@ MainWindow::~MainWindow()
     Settings::instance().storeGeometry(this);
 
     delete p_;
+}
+
+void MainWindow::showEvent(QShowEvent* )
+{
+    p_->shaderList->api()->loadAllShaders();
 }
 
 void MainWindow::Private::createWidgets()
@@ -160,20 +163,38 @@ void MainWindow::Private::createWidgets()
 
         infoLabel = new QLabel();
         lv->addWidget(infoLabel);
+
+        progressBar = new QProgressBar(win);
+        lv->addWidget(progressBar);
+        connect(shaderList->api(), &ShadertoyApi::downloadProgress, [=](int p)
+        {
+            progressBar->setValue(p);
+        });
+        connect(shaderList->api(), &ShadertoyApi::mergeFinished, [=]()
+        {
+            progressBar->setVisible(false);
+        });
 }
 
 void MainWindow::Private::createMenu()
 {
     auto menu = win->menuBar()->addMenu(tr("Shaders"));
 
-    auto a = menu->addAction(tr("Download shader list"));
-    connect(a, &QAction::triggered, [=](){ api->downloadShaderList(); });
+    auto a = menu->addAction(tr("Load shaders from disk"));
+    connect(a, &QAction::triggered, [=](){ shaderList->api()->loadAllShaders(); });
 
-    a = menu->addAction(tr("Load shaders"));
-    connect(a, &QAction::triggered, [=](){ api->loadAllShaders(); });
+    menu->addSeparator();
 
-    a = menu->addAction(tr("Download shaders"));
-    connect(a, &QAction::triggered, [=](){ downloadUnknownShaders(); });
+    a = menu->addAction(tr("Merge with shadertoy.com"));
+    connect(a, &QAction::triggered, [=]()
+    {
+        progressBar->setValue(0);
+        progressBar->setVisible(true);
+        shaderList->api()->mergeWithWeb();
+    });
+
+    a = menu->addAction(tr("Stop web request"));
+    connect(a, &QAction::triggered, [=](){ shaderList->api()->stopRequests(); });
 
 }
 
@@ -188,14 +209,14 @@ void MainWindow::Private::setShader(const ShadertoyShader& s)
     QString text;
     QTextStream str(&text);
 
-    str /*<< "id: " << s.info().id
-        << "\nname: " << s.info().name
+    str << "name: " << s.info().name
+        /*<< "id: " << s.info().id
         << "\nuser: " << s.info().username
         << "\nviews: " << s.info().views
         << "\nlikes: " << s.info().likes
         << "\nflags: " << s.info().flags
            */
-        << "\ndesc: " << s.info().description
+        << " desc: " << s.info().description
     ;
     infoLabel->setText(text);
 
@@ -204,45 +225,6 @@ void MainWindow::Private::setShader(const ShadertoyShader& s)
     renderWidget->update();
 }
 
-void MainWindow::p_onShaderList_()
-{
-    /*
-    const auto ids = p_->api->shaderIds();
-    p_->shaderList->initWithIds(ids);
-    */
-}
-
-void MainWindow::p_onShader_(const QString& id)
-{
-    /*
-    auto s = p_->api->shader();
-    p_->shaderList->setShader(s.info().id, s);
-
-    // download next shader from list
-    const auto ids = p_->shaderList->shaderIds();
-    while (p_->curDownShader < ids.size()
-           && p_->shaderList->getShader(p_->curDownShader).isValid())
-        ++p_->curDownShader;
-    if (p_->curDownShader < ids.size())
-        p_->api->downloadShader(ids[p_->curDownShader]);
-    */
-}
-
-void MainWindow::Private::downloadUnknownShaders()
-{
-    const auto ids = shaderList->shaderIds();
-    curDownShader = 0;
-    while (curDownShader < ids.size()
-           && shaderList->getShader(curDownShader).isValid())
-        ++curDownShader;
-    if (curDownShader < ids.size())
-        api->downloadShader(ids[curDownShader]);
-}
-
-void MainWindow::Private::loadShaders()
-{
-    shaderList->loadShaders();
-}
 
 void MainWindow::Private::onShaderEdited()
 {
