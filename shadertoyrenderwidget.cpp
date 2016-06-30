@@ -33,6 +33,7 @@ struct ShadertoyRenderWidget::Private
         , mouseKeys     (0)
         , projectMode   (ShadertoyRenderer::P_RECT)
         , isPlaying     (false)
+        , tryRender     (true)
         , pauseTime     (0.f)
         , timeOffset    (0.f)
     {
@@ -48,7 +49,7 @@ struct ShadertoyRenderWidget::Private
     int mouseKeys;
     ShadertoyRenderer::Projection projectMode;
 
-    bool isPlaying;
+    bool isPlaying, tryRender;
     int frame;
     QBasicTimer timer;
     QTime timeMessure;
@@ -81,6 +82,7 @@ void ShadertoyRenderWidget::setShader(const ShadertoyShader& s)
         p_->hasNewShader = true;
     p_->frame = 0;
     p_->timeMessure.start();
+    p_->tryRender = true;
     rerender();
 }
 
@@ -204,7 +206,11 @@ void ShadertoyRenderWidget::paintGL()
                                        p_->mouseKeys & Qt::RightButton);
     p_->render->setDate(QDateTime::currentDateTime());
 
-    if (!p_->render->render(rect()))
+    bool r = false;
+    if (p_->tryRender)
+        r = p_->render->render(rect());
+
+    if (!r)
     {
         QPainter p(this);
         p.setBrush(QBrush(Qt::black));
@@ -212,6 +218,7 @@ void ShadertoyRenderWidget::paintGL()
         p.drawRect(rect());
         p.drawText(rect(), Qt::AlignCenter,
                    tr("shader error\n%1").arg(p_->render->errorString()));
+        p_->tryRender = false;
     }
 }
 

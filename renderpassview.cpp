@@ -157,7 +157,7 @@ void RenderPassView::Private::createWidgets()
     jsonView = new QPlainTextEdit(p);
     jsonView->setReadOnly(true);
     lv->addWidget(jsonView);
-    //jsonView->setVisible(false);
+    jsonView->setVisible(false);
 }
 
 const ShadertoyShader& RenderPassView::shader() const { return p_->shader; }

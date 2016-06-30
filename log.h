@@ -73,7 +73,20 @@ struct Log
 #   define ST_DEBUG_CTOR(unused__) { }
 #endif
 
+#if 0 && !defined(NDEBUG)
+#   define ST_DEBUG3(arg__)     ST_LOG_IMPL_(::Log::L_DEBUG, "DEBUG", arg__)
+#else
+#   define ST_DEBUG3(unused__) { }
+#endif
 
-
+#ifndef NDEBUG
+#   define ST_CHECK_GL(code__) \
+        { code__; GLenum err__ = gl->glGetError(); \
+            if (err__ != GL_NO_ERROR) { ST_ERROR("OpenGL error " << err__ \
+                                         << " for '" << #code__ << "'\n" \
+                                         << __FILE__ << ":" << __LINE__); } }
+#else
+#   define ST_CHECK_GL(code__) { code__; }
+#endif
 
 #endif // LOG_H

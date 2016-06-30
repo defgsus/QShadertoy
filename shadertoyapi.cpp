@@ -263,6 +263,11 @@ void ShadertoyApi::Private::readShader(QNetworkReply* reply)
 void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
 {
     auto data = reply->readAll();
+    if (data.isEmpty())
+    {
+        ST_ERROR("No data received");
+        return;
+    }
 
     const QString
             src = reply->property("user").toString().mid(7),
@@ -460,7 +465,7 @@ QImage ShadertoyApi::Private::loadImage(const QString& src)
     QImageReader read(cacheUrlAssets + src);
     QImage img = read.read();
     if (img.isNull())
-        ST_ERROR("load image failed '" << read.fileName() << "\n"
+        ST_ERROR("load image failed for '" << read.fileName() << "': "
                  << read.errorString());
     return img;
 }

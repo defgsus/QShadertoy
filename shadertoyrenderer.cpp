@@ -27,6 +27,7 @@
 #include "shadertoyrenderer.h"
 #include "shadertoyshader.h"
 #include "shadertoyapi.h"
+#include "framebufferobject.h"
 #include "log.h"
 
 #define ST_RENDER_ERROR(qstring__) \
@@ -68,11 +69,12 @@ struct ShadertoyRenderer::Private
     bool render(const QRect& viewPort);
     bool drawQuad(RenderPass& pass);
 
+
     struct RenderPass
     {
         ShadertoyRenderPass::Type type;
         QOpenGLShaderProgram* shader;
-        QOpenGLFramebufferObject* fbo;
+        FramebufferObject* fbo;
         QOpenGLTexture* tex[4];
         QString src[4];
         bool vFlip[4];
@@ -310,6 +312,8 @@ bool ShadertoyRenderer::Private::createGl()
         }
     }
 
+    auto gl = context->functions();
+
     projection.setToIdentity();
     projection.ortho(QRectF(-1,-1,2,2));
 
@@ -342,8 +346,8 @@ bool ShadertoyRenderer::Private::createGl()
         RenderPass rpNew;
         rpNew.shader = new QOpenGLShaderProgram();
         rpNew.fbo = nullptr;
-        if (pass.type() != ShadertoyRenderPass::T_IMAGE)
-            rpNew.fbo = new QOpenGLFramebufferObject(resolution, GL_TEXTURE_2D);
+        //if (pass.type() != ShadertoyRenderPass::T_IMAGE)
+        //    rpNew.fbo = new FramebufferObject(context);
         rpNew.type = pass.type();
 
         passes.push_back(rpNew);
@@ -352,28 +356,31 @@ bool ShadertoyRenderer::Private::createGl()
         // --- query textures ---
 
         QSet<QString> queried;
-        for (size_t j=0; j<4; ++j)
+        for (size_t inCh=0; inCh<4; ++inCh)
         {
-            rp.tex[j] = nullptr;
-            rp.src[j].clear();
-            rp.vFlip[j] = false;
-            rp.wrapMode[j] = QOpenGLTexture::ClampToEdge;
-            rp.filterType[j] = QOpenGLTexture::Linear;
-            rp.inputId[j] = -1;
+            rp.tex[inCh] = nullptr;
+            rp.src[inCh].clear();
+            rp.vFlip[inCh] = false;
+            rp.wrapMode[inCh] = QOpenGLTexture::ClampToEdge;
+            rp.filterType[inCh] = QOpenGLTexture::Linear;
+            rp.inputId[inCh] = -1;
+            rp.outputId = pass.outputId();
 
-            if (j < pass.numInputs())
+            if (inCh < pass.numInputs())
             {
-                auto inp = pass.input(j);
-                ST_INFO(inp.toString());
+                auto inp = pass.input(inCh);
+                //ST_INFO(inp.toString());
 
-                rp.src[j] = inp.src;
-                rp.vFlip[j] = inp.vFlip;
+                rp.src[inCh] = inp.src;
+                rp.vFlip[inCh] = inp.vFlip;
                 if (inp.filterType == ShadertoyInput::F_NEAREST)
-                    rp.filterType[j] = QOpenGLTexture::Nearest;
+                    rp.filterType[inCh] = QOpenGLTexture::Nearest;
                 else if (inp.filterType == ShadertoyInput::F_MIPMAP)
-                    rp.filterType[j] = QOpenGLTexture::LinearMipMapLinear;
+                    rp.filterType[inCh] = QOpenGLTexture::LinearMipMapLinear;
                 if (inp.wrapMode == ShadertoyInput::W_REPEAT)
-                    rp.wrapMode[j] = QOpenGLTexture::Repeat;
+                    rp.wrapMode[inCh] = QOpenGLTexture::Repeat;
+
+                rp.inputId[inCh] = inp.id;
 
                 if (inp.type == ShadertoyInput::T_TEXTURE
                 || inp.type == ShadertoyInput::T_CUBEMAP)
@@ -386,7 +393,7 @@ bool ShadertoyRenderer::Private::createGl()
                 }
                 else if (inp.type == ShadertoyInput::T_BUFFER)
                 {
-                    rp.inputId[j] = inp.id;
+                    //ST_DEBUG2("input " << inCh << " = " << inp.id);
                 }
 
             }
@@ -424,6 +431,7 @@ bool ShadertoyRenderer::Private::createGl()
             return false;
         }
 
+
         // -- link shader --
 
         if (   !rp.shader->addShader(vert)
@@ -434,6 +442,7 @@ bool ShadertoyRenderer::Private::createGl()
             destroyGl();
             return false;
         }
+        rp.shader->bind();
 
         // -- get attributes and uniforms --
 
@@ -454,19 +463,30 @@ bool ShadertoyRenderer::Private::createGl()
         {
             rp.iChannel[j] = rp.shader->uniformLocation(
                                     QString("iChannel%1").arg(j));
-            rp.shader->setUniformValue(rp.iChannel[j], j);
+            if (rp.iChannel[j] >= 0)
+                rp.shader->setUniformValue(rp.iChannel[j], j);
         }
 
+        ST_CHECK_GL( gl->glUseProgram(0) );
     }
 
+    // assign correct index into 'passes'
+    // for inputs connected to output ids
     for (RenderPass& p : passes)
     {
         for (int i=0; i<4; ++i)
         if (p.inputId[i] >= 0)
         {
+            //ST_DEBUG2("checking input " << i << " = " << p.inputId[i]);
             for (size_t j=0; j<passes.size(); ++j)
+            {
+                //ST_DEBUG2(j << "->" << passes[j].outputId);
                 if (passes[j].outputId == p.inputId[i])
+                {
                     p.inputId[i] = j;
+                    //ST_DEBUG2("assigned output " << j);
+                }
+            }
         }
     }
 
@@ -479,6 +499,9 @@ bool ShadertoyRenderer::Private::createGl()
                            6 * sizeof(GLushort));
     if (!bufIdx) { destroyGl(); return false; }
 
+    ST_CHECK_GL( );
+
+    ST_DEBUG2("ShadertoyRenderer::createGl() done");
 
     // -- done --
 
@@ -519,7 +542,8 @@ void ShadertoyRenderer::Private::destroyGl()
         if (rp.shader && rp.shader->isLinked())
             rp.shader->release();
         delete rp.shader;
-        if (rp.fbo && rp.fbo->isValid())
+
+        if (rp.fbo)
             rp.fbo->release();
         delete rp.fbo;
     }
@@ -542,6 +566,8 @@ bool ShadertoyRenderer::render(const QRect& v) { return p_->render(v); }
 
 bool ShadertoyRenderer::Private::render(const QRect& viewPort)
 {
+    ST_DEBUG3("ShadertoyRenderer::Private::render()");
+
     if (!p->isReady() || needsRecompile)
     {
         destroyGl();
@@ -557,7 +583,8 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort)
         return false;
     }
 
-    gl->glViewport(viewPort.x(), viewPort.y(), viewPort.width(), viewPort.height());
+    ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
+                                viewPort.width(), viewPort.height()) );
 
     bool r = true;
     for (auto& p : passes)
@@ -579,7 +606,7 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     for (int i=0; i<4; ++i)
     {
-        gl->glActiveTexture(GL_TEXTURE0 + i);
+        ST_CHECK_GL( gl->glActiveTexture(GL_TEXTURE0 + i) );
 
         if (pass.inputId[i] >= 0 && (size_t)pass.inputId[i] < passes.size())
         {
@@ -587,8 +614,11 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
             if (opass.fbo)
             {
                 int texName = opass.fbo->texture();
-                gl->glBindTexture(GL_TEXTURE_2D, texName);
-                ST_DEBUG2(pass.inputId << " bind " << texName);
+                if (texName >= 0)
+                {
+                    ST_DEBUG3("bind fbo[" << pass.inputId << "] to slot" << i);
+                    ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D, texName) );
+                }
             }
             continue;
         }
@@ -596,20 +626,26 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
         if (pass.tex[i] == nullptr
             && !pass.img[i].isNull())
         {
+            ST_DEBUG3("create texture from image for slot" << i);
+
             pass.tex[i] = new QOpenGLTexture(
                         pass.vFlip[i] ? pass.img[i].mirrored(false, true)
                                       : pass.img[i],
                         pass.filterType[i] == QOpenGLTexture::LinearMipMapLinear
                         ? QOpenGLTexture::GenerateMipMaps
-                        : QOpenGLTexture::DontGenerateMipMaps);
-            pass.tex[i]->setMinMagFilters(
-                QOpenGLTexture::Linear, pass.filterType[i]);
-            pass.tex[i]->setWrapMode(pass.wrapMode[i]);
+                        : QOpenGLTexture::DontGenerateMipMaps
+                        );
+            ST_CHECK_GL( pass.tex[i]->setMinMagFilters(
+                             pass.filterType[i],
+                             pass.filterType[i] == QOpenGLTexture::Nearest
+                             ? QOpenGLTexture::Nearest : QOpenGLTexture::Linear) );
+            ST_CHECK_GL( pass.tex[i]->setWrapMode(pass.wrapMode[i]) );
         }
 
         if (!pass.tex[i])
             continue;
 
+        ST_DEBUG3("bind texture to slot" << i);
         pass.tex[i]->bind();
     }
 
@@ -627,7 +663,9 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
         return false;
     }
 
+
     // --- update attributes and uniforms ---
+
 
     pass.shader->setUniformValue(pass.mvp_matrix, projection);
     pass.shader->setUniformValue(pass.iResolution,
@@ -653,30 +691,21 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     {
         if (!pass.fbo || pass.fbo->size() != resolution)
         {
-            if (pass.fbo)
-                pass.fbo->release();
-            delete pass.fbo;
+            if (!pass.fbo)
+                pass.fbo = new FramebufferObject(context);
 
-            pass.fbo = new QOpenGLFramebufferObject(resolution, GL_TEXTURE_2D);
+            pass.fbo->create(resolution);
         }
         pass.fbo->bind();
     }
 
-    gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    ST_CHECK_GL( gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) );
+    ST_CHECK_GL( gl->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr) );
 
-    gl->glGetError();
-    gl->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
-    auto e = gl->glGetError();
-    if (e != 0)
+    if (pass.type == ShadertoyRenderPass::T_BUFFER && pass.fbo)
     {
-        ST_RENDER_ERROR("drawElements failed");
-        return false;
-    }
-
-    if (pass.type == ShadertoyRenderPass::T_BUFFER)
-    {
-        QOpenGLFramebufferObject::bindDefault();
-        //gl->glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        pass.fbo->swapTexture();
+        pass.fbo->unbind();
     }
 
     return true;

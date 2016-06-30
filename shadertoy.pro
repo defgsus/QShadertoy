@@ -29,7 +29,8 @@ SOURCES += main.cpp\
     shadertoyrenderwidget.cpp \
     log.cpp \
     logview.cpp \
-    tableplotview.cpp
+    tableplotview.cpp \
+    framebufferobject.cpp
 
 HEADERS  += mainwindow.h \
     shadertoyapi.h \
@@ -42,4 +43,5 @@ HEADERS  += mainwindow.h \
     shadertoyrenderwidget.h \
     log.h \
     logview.h \
-    tableplotview.h
+    tableplotview.h \
+    framebufferobject.h
