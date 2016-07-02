@@ -271,6 +271,8 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
     qSort(p_passes_.begin(), p_passes_.end(),
           [](const ShadertoyRenderPass& l, const ShadertoyRenderPass& r)
     {
+        if (l.type() == r.type())
+            return l.name() < r.name();
         return l.type() < r.type();
     });
 
@@ -280,7 +282,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 bool ShadertoyShader::containsString(const QString& s) const
 {
     if (p_info_.description.contains(s, Qt::CaseInsensitive)
-        || p_info_.name.contains(s)
+        || p_info_.name.contains(s, Qt::CaseInsensitive)
         || p_info_.username.contains(s, Qt::CaseInsensitive))
         return true;
 

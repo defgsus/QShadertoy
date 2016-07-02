@@ -76,13 +76,14 @@ struct ShadertoyRenderer::Private
         QOpenGLShaderProgram* shader;
         FramebufferObject* fbo;
         QOpenGLTexture* tex[4];
-        QString src[4];
+        QString src[4], name;
         bool vFlip[4];
         QOpenGLTexture::WrapMode wrapMode[4];
         QOpenGLTexture::Filter filterType[4];
         QImage img[4];
         int outputId,
             inputId[4];
+        RenderPass* inputPass[4];
 
         int mvp_matrix,
             a_position,
@@ -349,9 +350,12 @@ bool ShadertoyRenderer::Private::createGl()
         //if (pass.type() != ShadertoyRenderPass::T_IMAGE)
         //    rpNew.fbo = new FramebufferObject(context);
         rpNew.type = pass.type();
+        rpNew.name = pass.name();
 
         passes.push_back(rpNew);
         RenderPass& rp = passes.back();
+
+        rp.outputId = pass.outputId();
 
         // --- query textures ---
 
@@ -364,7 +368,7 @@ bool ShadertoyRenderer::Private::createGl()
             rp.wrapMode[inCh] = QOpenGLTexture::ClampToEdge;
             rp.filterType[inCh] = QOpenGLTexture::Linear;
             rp.inputId[inCh] = -1;
-            rp.outputId = pass.outputId();
+            rp.inputPass[inCh] = nullptr;
 
             if (inCh < pass.numInputs())
             {
@@ -381,6 +385,8 @@ bool ShadertoyRenderer::Private::createGl()
                     rp.wrapMode[inCh] = QOpenGLTexture::Repeat;
 
                 rp.inputId[inCh] = inp.id;
+                ST_DEBUG2("pass(" << pass.name() << "): "
+                          "input slot " << inCh << " from id " << inp.id);
 
                 if (inp.type == ShadertoyInput::T_TEXTURE
                 || inp.type == ShadertoyInput::T_CUBEMAP)
@@ -474,6 +480,7 @@ bool ShadertoyRenderer::Private::createGl()
     // for inputs connected to output ids
     for (RenderPass& p : passes)
     {
+        //ST_DEBUG2("checking pass " << p.name);
         for (int i=0; i<4; ++i)
         if (p.inputId[i] >= 0)
         {
@@ -483,7 +490,7 @@ bool ShadertoyRenderer::Private::createGl()
                 //ST_DEBUG2(j << "->" << passes[j].outputId);
                 if (passes[j].outputId == p.inputId[i])
                 {
-                    p.inputId[i] = j;
+                    p.inputPass[i] = &passes[j];
                     //ST_DEBUG2("assigned output " << j);
                 }
             }
@@ -594,6 +601,8 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort)
 
 bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 {
+    ST_DEBUG3("ShadertoyRenderer::drawQuad(" << pass.name << ")");
+
     auto gl = context->functions();
 
     if (!pass.shader->bind())
@@ -608,15 +617,18 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     {
         ST_CHECK_GL( gl->glActiveTexture(GL_TEXTURE0 + i) );
 
-        if (pass.inputId[i] >= 0 && (size_t)pass.inputId[i] < passes.size())
+        if (auto opass = pass.inputPass[i])
         {
-            RenderPass& opass = passes[pass.inputId[i]];
-            if (opass.fbo)
+            ST_DEBUG3("pass(" << pass.name << ") input-pass slot " << i << " assigned");
+            if (opass->fbo)
             {
-                int texName = opass.fbo->texture();
+                int texName = opass->fbo->readableTexture();
                 if (texName >= 0)
                 {
-                    ST_DEBUG3("bind fbo[" << pass.inputId << "] to slot" << i);
+                    ST_DEBUG3("pass(" << pass.name
+                              << ") bind (" << opass->name << ").fbo[id="
+                              << pass.inputId[i] << ", tex=" << texName
+                              << "] to slot " << i);
                     ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D, texName) );
                 }
             }
@@ -689,13 +701,12 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     if (pass.type == ShadertoyRenderPass::T_BUFFER)
     {
-        if (!pass.fbo || pass.fbo->size() != resolution)
-        {
-            if (!pass.fbo)
-                pass.fbo = new FramebufferObject(context);
+        if (!pass.fbo)
+            pass.fbo = new FramebufferObject(context);
 
+        if (pass.fbo->size() != resolution)
             pass.fbo->create(resolution);
-        }
+
         pass.fbo->bind();
     }
 

@@ -67,8 +67,8 @@ public slots:
     void setEyeDistance(float);
     void setEyeRotation(float);
 
-    /** Renders the shader to the given gl context.
-        This might compile the shader if needed.
+    /** Renders the shader to the current gl context.
+        This will compile the shader and create all resources if needed.
         On any error, false is returned and errorString() contains
         the description of the error. */
     bool render(const QRect& viewPort);

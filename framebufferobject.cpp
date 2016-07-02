@@ -75,10 +75,8 @@ bool FramebufferObject::create(const QSize &s)
     return true;
 }
 
-int FramebufferObject::texture() const
-{
-    return p_tex1_;
-}
+int FramebufferObject::texture() const { return p_tex1_; }
+int FramebufferObject::readableTexture() const { return p_tex2_; }
 
 int FramebufferObject::swapTexture()
 {
