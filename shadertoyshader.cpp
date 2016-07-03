@@ -20,8 +20,9 @@ QString ShadertoyInput::nameForType(Type t)
     {
         case T_NONE: return "none";
         case T_TEXTURE: return "texture";
-        case T_VIDEO: return "video";
         case T_CUBEMAP: return "cubemap";
+        case T_VIDEO: return "video";
+        case T_CAMERA: return "camera";
         case T_BUFFER: return "buffer";
         case T_KEYBOARD: return "keyboard";
         case T_MICROPHONE: return "microphone";
@@ -179,8 +180,8 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
     p_info_.name = inf.value("name").toString();
     p_info_.username = inf.value("username").toString();
     p_info_.description = inf.value("description").toString();
-    auto secs = inf.value("date").toString().toLong();
-    p_info_.date = QDateTime(QDate(1970, 1, 1)).addSecs(secs);
+    { auto secs = inf.value("date").toString().toLong();
+    p_info_.date = QDateTime(QDate(1970, 1, 1)).addSecs(secs); }
     p_info_.tags.clear();
     for (auto t : inf.value("tags").toArray())
         p_info_.tags << t.toString();
@@ -190,6 +191,9 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
     p_info_.usesBuffers = false;
     p_info_.usesMusic = false;
     p_info_.usesVideo = false;
+    p_info_.usesCamera = false;
+    p_info_.usesMicrophone = false;
+    p_info_.usesKeyboard = false;
 
     // --- read render passes ---
 
@@ -227,6 +231,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
             name = p.typeName();
         p.p_name_ = name;
 
+        // XXX Takes the first output id (no multi-target yet)
         auto outputs = p.p_data_.value("outputs").toArray();
         if (outputs.isEmpty())
             p.p_outputId_ = -1;
@@ -238,6 +243,8 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
         // -- create inputs --
 
+        // pre-create empty slots
+        // (because channels in json are randomly ordered)
         p.p_inputs_.resize(4);
         for (ShadertoyInput& i : p.p_inputs_)
             i.type = ShadertoyInput::T_NONE;
@@ -253,7 +260,10 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
             const QString ctype = in.value("ctype").toString();
             if (ctype == "keyboard")
+            {
+                p_info_.usesKeyboard = true;
                 inp.type = ShadertoyInput::T_KEYBOARD;
+            }
             else if (ctype == "musicstream")
             {
                 p_info_.usesMusic = true;
@@ -266,8 +276,13 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
             }
             else if (ctype == "microphone")
             {
-                p_info_.usesMusic = true;
+                p_info_.usesMicrophone = true;
                 inp.type = ShadertoyInput::T_MICROPHONE;
+            }
+            else if (ctype == "webcam")
+            {
+                p_info_.usesCamera = true;
+                inp.type = ShadertoyInput::T_CAMERA;
             }
             else if (ctype == "buffer")
             {
@@ -284,10 +299,15 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
                 p_info_.usesTextures = true;
                 inp.type = ShadertoyInput::T_CUBEMAP;
             }
-            else
+            else if (ctype == "texture")
             {
                 p_info_.usesTextures = true;
                 inp.type = ShadertoyInput::T_TEXTURE;
+            }
+            else
+            {
+                ST_ERROR("ctype '" << ctype << "' not defined!");
+                inp.type = ShadertoyInput::T_NONE;
             }
 
             auto sampler = in.value("sampler").toObject();
@@ -311,14 +331,6 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
             p.p_inputs_[inp.channel] = inp;
         }
-        /*
-        // sort inputs for channel number
-        qSort(p.p_inputs_.begin(), p.p_inputs_.end(),
-              [](const ShadertoyInput& l, const ShadertoyInput& r)
-        {
-            return l.channel < r.channel;
-        });
-        */
 
         p_passes_.push_back(p);
     }
@@ -327,8 +339,10 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
     qSort(p_passes_.begin(), p_passes_.end(),
           [](const ShadertoyRenderPass& l, const ShadertoyRenderPass& r)
     {
+        // sorts "Buf X" alphabetically
         if (l.type() == r.type())
             return l.name() < r.name();
+        // otherwise by type
         return l.type() < r.type();
     });
 

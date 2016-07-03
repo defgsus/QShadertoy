@@ -22,8 +22,9 @@ struct ShadertoyInput
     {
         T_NONE,
         T_TEXTURE,
-        T_VIDEO,
         T_CUBEMAP,
+        T_VIDEO,
+        T_CAMERA,
         T_BUFFER,
         T_KEYBOARD,
         T_MICROPHONE,
@@ -73,7 +74,7 @@ class ShadertoyRenderPass
 {
 public:
 
-    /** Order matters for correct sorting/execution */
+    /** Order matters for correct execution order */
     enum Type
     {
         T_BUFFER = 0,
@@ -124,7 +125,10 @@ struct ShadertoyShaderInfo
     bool usesTextures,
          usesBuffers,
          usesMusic,
-         usesVideo;
+         usesVideo,
+         usesCamera,
+         usesMicrophone,
+         usesKeyboard;
 };
 
 class ShadertoyShader

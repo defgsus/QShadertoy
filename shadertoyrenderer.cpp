@@ -24,6 +24,9 @@
 #include <QMatrix4x4>
 #include <QImage>
 #include <QSet>
+#include <QCamera>
+#include <QCameraInfo>
+#include <QCameraImageCapture>
 
 #include "shadertoyrenderer.h"
 #include "shadertoyshader.h"
@@ -58,7 +61,11 @@ struct ShadertoyRenderer::Private
         , eyeRotation   (0.0f)
         , frameNumber   (0)
         , keyTexture    (nullptr)
+        , cameraTexture (nullptr)
+        , camera        (nullptr)
+        , cameraCapture (nullptr)
         , needsRecompile(true)
+        , doUseCamera   (true)
     {
         connect(api, SIGNAL(textureReceived(QString,QImage)),
                 p, SLOT(p_onTexture_(QString,QImage)),
@@ -74,6 +81,7 @@ struct ShadertoyRenderer::Private
             QOpenGLBuffer::Type, const void* data, int count);
     QOpenGLTexture* getImageTexture(RenderPass& pass, int idx);
     QOpenGLTexture* getKeyboardTexture();
+    void updateCameraTexture();
     bool render(const QRect& viewPort, bool continuous);
     bool drawQuad(RenderPass& pass);
 
@@ -138,10 +146,12 @@ struct ShadertoyRenderer::Private
 
     ShadertoyShader shadertoy;
     std::vector<RenderPass> passes;
-    QOpenGLTexture* keyTexture;
+    QOpenGLTexture* keyTexture, *cameraTexture;
     QMap<QString, QOpenGLTexture*> textureMap;
+    QCamera* camera;
+    QCameraImageCapture* cameraCapture;
 
-    bool needsRecompile;
+    bool needsRecompile, doUseCamera;
 };
 
 const GLfloat ShadertoyRenderer::Private::quadVertices[] =
@@ -583,6 +593,11 @@ void ShadertoyRenderer::Private::destroyGl()
     delete keyTexture;
     keyTexture = nullptr;
 
+    if (cameraTexture && cameraTexture->isCreated())
+        cameraTexture->release();
+    delete cameraTexture;
+    cameraTexture = nullptr;
+
     for (auto t : textureMap)
     {
         t->release();
@@ -649,6 +664,9 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
         deltaRenderTime = 0.;
     }
 
+    if (shadertoy.info().usesCamera)
+        updateCameraTexture();
+
     ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
                                 viewPort.width(), viewPort.height()) );
     bool r = true;
@@ -657,63 +675,6 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
     return r;
 }
 
-QOpenGLTexture* ShadertoyRenderer::Private::getImageTexture(
-        RenderPass& pass, int idx)
-{
-    if (textureMap.contains(pass.src[idx]))
-        return textureMap.value(pass.src[idx]);
-
-    // image not ready
-    if (pass.img[idx].isNull())
-        return nullptr;
-
-    ST_DEBUG3("pass(" << pass.name
-              << "): create texture from image for slot " << idx);
-
-    auto t = new QOpenGLTexture(
-                pass.vFlip[idx] ? pass.img[idx].mirrored(false, true)
-                              : pass.img[idx],
-                // pass.filterType[idx] == QOpenGLTexture::LinearMipMapLinear ?
-                 QOpenGLTexture::GenerateMipMaps
-                //: QOpenGLTexture::DontGenerateMipMaps
-                );
-    if (!t->isCreated())
-    {
-        ST_ERROR("Could not create texture for image '" << pass.src[idx] << "'");
-        delete t;
-        return nullptr;
-    }
-
-    textureMap.insert(pass.src[idx], t);
-    return t;
-}
-
-QOpenGLTexture* ShadertoyRenderer::Private::getKeyboardTexture()
-{
-    if (!keyTexture)
-    {
-        keyTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
-        keyTexture->setFormat(QOpenGLTexture::RGB8_UNorm);
-        keyTexture->setSize(256, 3);
-        keyTexture->allocateStorage();
-        isKeyStateChanged = true;
-    }
-
-    if (!keyTexture->isCreated())
-    {
-        ST_ERROR("keyboard texture could not be allocated");
-        return nullptr;
-    }
-
-    if (isKeyStateChanged)
-    {
-        isKeyStateChanged = false;
-        keyTexture->setData(QOpenGLTexture::Luminance,
-                            QOpenGLTexture::UInt8, &keyState[0]);
-    }
-
-    return keyTexture;
-}
 
 bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 {
@@ -747,6 +708,10 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
             case ShadertoyInput::T_TEXTURE:
                 if (!pass.tex[i])
                     pass.tex[i] = getImageTexture(pass, i);
+            break;
+
+            case ShadertoyInput::T_CAMERA:
+                pass.tex[i] = cameraTexture;
             break;
 
             case ShadertoyInput::T_BUFFER:
@@ -856,4 +821,113 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     }
 
     return true;
+}
+
+
+
+
+QOpenGLTexture* ShadertoyRenderer::Private::getImageTexture(
+        RenderPass& pass, int idx)
+{
+    if (textureMap.contains(pass.src[idx]))
+        return textureMap.value(pass.src[idx]);
+
+    // image not ready
+    if (pass.img[idx].isNull())
+        return nullptr;
+
+    ST_DEBUG3("pass(" << pass.name
+              << "): create texture from image for slot " << idx);
+
+    auto t = new QOpenGLTexture(
+                pass.vFlip[idx] ? pass.img[idx].mirrored(false, true)
+                              : pass.img[idx],
+                // pass.filterType[idx] == QOpenGLTexture::LinearMipMapLinear ?
+                 QOpenGLTexture::GenerateMipMaps
+                //: QOpenGLTexture::DontGenerateMipMaps
+                );
+    if (!t->isCreated())
+    {
+        ST_ERROR("Could not create texture for image '" << pass.src[idx] << "'");
+        delete t;
+        return nullptr;
+    }
+
+    textureMap.insert(pass.src[idx], t);
+    return t;
+}
+
+QOpenGLTexture* ShadertoyRenderer::Private::getKeyboardTexture()
+{
+    if (!keyTexture)
+    {
+        keyTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+        keyTexture->setFormat(QOpenGLTexture::RGB8_UNorm);
+        keyTexture->setSize(256, 3);
+        keyTexture->allocateStorage();
+        isKeyStateChanged = true;
+    }
+
+    if (!keyTexture->isCreated())
+    {
+        ST_ERROR("keyboard texture could not be allocated");
+        return nullptr;
+    }
+
+    if (isKeyStateChanged)
+    {
+        isKeyStateChanged = false;
+        keyTexture->setData(QOpenGLTexture::Luminance,
+                            QOpenGLTexture::UInt8, &keyState[0]);
+    }
+
+    return keyTexture;
+}
+
+void ShadertoyRenderer::Private::updateCameraTexture()
+{
+    if (!doUseCamera)
+        return;
+
+    if (!camera)
+    {
+        auto cams = QCameraInfo::availableCameras();
+        ST_DEBUG(cams.size() << " available cameras");
+        for (const QCameraInfo &cameraInfo : cams)
+            ST_DEBUG( cameraInfo.deviceName() );
+
+        if (cams.isEmpty())
+        {
+            ST_ERROR("No camera found");
+            doUseCamera = false;
+            return;
+        }
+
+        camera = new QCamera(QCamera::FrontFace, p);
+        cameraCapture = new QCameraImageCapture(camera, p);
+        cameraCapture->setCaptureDestination(QCameraImageCapture::CaptureToBuffer);
+
+        camera->setCaptureMode(QCamera::CaptureVideo);
+        camera->start();
+        if (camera->error() != QCamera::NoError)
+        {
+            ST_ERROR("Could not start camera: " << camera->errorString());
+            doUseCamera = false;
+            camera->deleteLater();
+            cameraCapture->deleteLater();
+            camera = nullptr;
+            cameraCapture = nullptr;
+            return;
+        }
+    }
+
+    cameraCapture->capture("../CAMERA.png");
+    camera->unlock();
+
+    if (cameraCapture->error() != QCameraImageCapture::NoError)
+    {
+        ST_ERROR("CameraCapture: " << cameraCapture->errorString());
+        return;
+    }
+
 }
