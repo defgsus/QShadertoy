@@ -20,10 +20,13 @@ struct ShadertoyInput
 {
     enum Type
     {
+        T_NONE,
         T_TEXTURE,
+        T_VIDEO,
         T_CUBEMAP,
         T_BUFFER,
         T_KEYBOARD,
+        T_MICROPHONE,
         T_MUSIC,
         T_MUSICSTREAM
     };
@@ -51,9 +54,15 @@ struct ShadertoyInput
     bool vFlip;
     QString src;
 
+    bool isNull() const { return type == T_NONE; }
     QString typeName() const { return nameForType(type); }
     QString filterTypeName() const { return nameForType(filterType); }
     QString wrapModeName() const { return nameForType(wrapMode); }
+
+    bool hasFilterSetting() const;
+    bool hasWrapSetting() const;
+    bool hasVFlipSetting() const;
+
 
     /** Description */
     QString toString() const;
@@ -113,7 +122,9 @@ struct ShadertoyShaderInfo
     size_t numChars;
     /** Uses textures (not buffers) */
     bool usesTextures,
-         usesMusic;
+         usesBuffers,
+         usesMusic,
+         usesVideo;
 };
 
 class ShadertoyShader

@@ -22,7 +22,8 @@ public:
     explicit ShadertoyRenderWidget(QWidget *parent = 0);
     ~ShadertoyRenderWidget();
 
-    float playbackTime() const;
+    double playbackTime() const;
+    double messuredFps() const;
 
     QWidget* createPlaybar(QWidget* parent);
 
@@ -44,6 +45,8 @@ protected:
     void mouseMoveEvent(QMouseEvent*) override;
     void mouseReleaseEvent(QMouseEvent*) override;
     void timerEvent(QTimerEvent*) override;
+    void keyPressEvent(QKeyEvent*) override;
+    void keyReleaseEvent(QKeyEvent*) override;
 
     void initializeGL() override;
     void paintGL() override;

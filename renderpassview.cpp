@@ -148,16 +148,29 @@ void RenderPassView::Private::createWidgets()
             inputWidgets.push_back(iw);
         }
 
-    auto but = new QToolButton(p);
-    but->setText(">");
-    but->setShortcut(Qt::ALT + Qt::Key_Return);
-    connect(but, &QToolButton::clicked, [=]() { sourceEdited(); });
-    lv->addWidget(but);
+    lh = new QHBoxLayout();
+    lh->setMargin(0);
+    lv->addLayout(lh);
+
+        auto but = new QToolButton(p);
+        but->setText(">");
+        but->setShortcut(Qt::ALT + Qt::Key_Return);
+        connect(but, &QToolButton::clicked, [=]() { sourceEdited(); });
+        lh->addWidget(but);
+
+        lh->addStretch();
+
+        auto cb = new QCheckBox(tr("show json"), p);
+        connect(cb, &QCheckBox::stateChanged, [=]()
+        {
+            jsonView->setVisible(cb->isChecked());
+        });
+        lh->addWidget(cb);
 
     jsonView = new QPlainTextEdit(p);
     jsonView->setReadOnly(true);
     lv->addWidget(jsonView);
-    //jsonView->setVisible(false);
+    jsonView->setVisible(false);
 }
 
 const ShadertoyShader& RenderPassView::shader() const { return p_->shader; }
@@ -177,14 +190,11 @@ void RenderPassView::setShader(const ShadertoyShader& s)
         for (size_t j=0; j<rp.numInputs(); ++j)
         {
             const ShadertoyInput& inp = rp.input(j);
-            if (inp.type == ShadertoyInput::T_TEXTURE
-              || inp.type == ShadertoyInput::T_CUBEMAP
-              || inp.type == ShadertoyInput::T_BUFFER)
+            if (inp.type != ShadertoyInput::T_MUSICSTREAM)
             {
                 p_->getPixmap(inp.src);
             }
         }
-
     }
 
     p_->tabBar->setCurrentIndex(0);
@@ -223,7 +233,7 @@ void RenderPassView::Private::selectTab(int idx)
         iw.imgLabel->clear();
         iw.src.clear();
 
-        if (i >= rp.numInputs())
+        if (i >= rp.numInputs() || rp.input(i).isNull())
         {
             iw.desc->setText("-");
             iw.filter->setEnabled(false);
@@ -234,9 +244,9 @@ void RenderPassView::Private::selectTab(int idx)
         {
             const ShadertoyInput& inp = rp.input(i);
 
-            iw.filter->setEnabled(true);
-            iw.wrap->setEnabled(true);
-            iw.vFlip->setEnabled(true);
+            iw.filter->setEnabled(inp.hasFilterSetting());
+            iw.wrap->setEnabled(inp.hasWrapSetting());
+            iw.vFlip->setEnabled(inp.hasVFlipSetting());
 
             iw.desc->setText(inp.typeName());
             iw.vFlip->setChecked(inp.vFlip);

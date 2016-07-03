@@ -18,14 +18,17 @@ QString ShadertoyInput::nameForType(Type t)
 {
     switch (t)
     {
+        case T_NONE: return "none";
         case T_TEXTURE: return "texture";
+        case T_VIDEO: return "video";
         case T_CUBEMAP: return "cubemap";
         case T_BUFFER: return "buffer";
         case T_KEYBOARD: return "keyboard";
+        case T_MICROPHONE: return "microphone";
         case T_MUSIC: return "music";
         case T_MUSICSTREAM: return "musicstream";
-        default: return "*unknown*";
     }
+    return "*unknown*";
 }
 
 QString ShadertoyInput::nameForType(FilterType t)
@@ -35,8 +38,8 @@ QString ShadertoyInput::nameForType(FilterType t)
         case F_NEAREST: return "nearest";
         case F_LINEAR: return "linear";
         case F_MIPMAP: return "mipmap";
-        default: return "*unknown*";
     }
+    return "*unknown*";
 }
 
 QString ShadertoyInput::nameForType(WrapMode t)
@@ -45,8 +48,8 @@ QString ShadertoyInput::nameForType(WrapMode t)
     {
         case W_CLAMP: return "clamp";
         case W_REPEAT: return "repeat";
-        default: return "*unknown*";
     }
+    return "*unknown*";
 }
 
 QString ShadertoyInput::toString() const
@@ -62,6 +65,30 @@ QString ShadertoyInput::toString() const
     return str;
 }
 
+bool ShadertoyInput::hasFilterSetting() const
+{
+    return type == T_TEXTURE
+        || type == T_VIDEO
+        || type == T_CUBEMAP
+        || type == T_BUFFER
+            ;
+}
+
+bool ShadertoyInput::hasWrapSetting() const
+{
+    return type == T_TEXTURE
+        || type == T_VIDEO
+            ;
+}
+
+bool ShadertoyInput::hasVFlipSetting() const
+{
+    return type == T_TEXTURE
+        || type == T_VIDEO
+        || type == T_CUBEMAP
+            ;
+}
+
 
 
 QString ShadertoyRenderPass::nameForType(Type t)
@@ -71,8 +98,8 @@ QString ShadertoyRenderPass::nameForType(Type t)
         case T_IMAGE: return "Image";
         case T_SOUND: return "Sound";
         case T_BUFFER: return "Buffer";
-        default: return "*unknown*";
     }
+    return "*unknown*";
 }
 
 void ShadertoyRenderPass::setFragmentSource(const QString& s)
@@ -160,7 +187,9 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
     p_info_.numChars = 0; // will be counted below
     p_info_.usesTextures = false;
+    p_info_.usesBuffers = false;
     p_info_.usesMusic = false;
+    p_info_.usesVideo = false;
 
     // --- read render passes ---
 
@@ -203,9 +232,15 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
             p.p_outputId_ = -1;
         else
         {
-            ST_DEBUG2("ID        " << outputs[0].toObject().value("id").toInt());
+            //ST_DEBUG2("ID        " << outputs[0].toObject().value("id").toInt());
             p.p_outputId_ = outputs[0].toObject().value("id").toInt();
         }
+
+        // -- create inputs --
+
+        p.p_inputs_.resize(4);
+        for (ShadertoyInput& i : p.p_inputs_)
+            i.type = ShadertoyInput::T_NONE;
 
         auto ins = p.p_data_.value("inputs").toArray();
         for (const QJsonValue& inv : ins)
@@ -229,8 +264,21 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
                 p_info_.usesMusic = true;
                 inp.type = ShadertoyInput::T_MUSIC;
             }
+            else if (ctype == "microphone")
+            {
+                p_info_.usesMusic = true;
+                inp.type = ShadertoyInput::T_MICROPHONE;
+            }
             else if (ctype == "buffer")
+            {
+                p_info_.usesBuffers = true;
                 inp.type = ShadertoyInput::T_BUFFER;
+            }
+            else if (ctype == "video")
+            {
+                p_info_.usesVideo = true;
+                inp.type = ShadertoyInput::T_VIDEO;
+            }
             else if (ctype == "cubemap")
             {
                 p_info_.usesTextures = true;
@@ -256,13 +304,21 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
                 inp.filterType = ShadertoyInput::F_NEAREST;
 
             const QString wtype = sampler.value("wrap").toString();
-            if (ftype == "clamp")
-                inp.wrapMode = ShadertoyInput::W_CLAMP;
-            else
+            if (ftype == "repeat")
                 inp.wrapMode = ShadertoyInput::W_REPEAT;
+            else
+                inp.wrapMode = ShadertoyInput::W_CLAMP;
 
-            p.p_inputs_.push_back(inp);
+            p.p_inputs_[inp.channel] = inp;
         }
+        /*
+        // sort inputs for channel number
+        qSort(p.p_inputs_.begin(), p.p_inputs_.end(),
+              [](const ShadertoyInput& l, const ShadertoyInput& r)
+        {
+            return l.channel < r.channel;
+        });
+        */
 
         p_passes_.push_back(p);
     }

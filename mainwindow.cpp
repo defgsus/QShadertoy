@@ -165,6 +165,7 @@ void MainWindow::Private::createWidgets()
         lv->addWidget(infoLabel);
 
         progressBar = new QProgressBar(win);
+        progressBar->setVisible(false);
         lv->addWidget(progressBar);
         connect(shaderList->api(), &ShadertoyApi::downloadProgress, [=](int p)
         {

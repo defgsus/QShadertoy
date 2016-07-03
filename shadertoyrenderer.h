@@ -40,7 +40,11 @@ public:
         during compilation or rendering */
     const QString& errorString() const;
 
-    Projection projection() const;
+    /** Current projection mode for VR hook. */
+    Projection projectionMode() const;
+
+    /** Messured frames per second that are archived */
+    double messuredFps() const;
 
 signals:
 
@@ -57,12 +61,15 @@ public slots:
         it's buffers. If the resolution changes, the next call
         to render() will recompile everything. */
     void setResolution(const QSize& );
-    void setProjection(Projection p);
+    /** Sets the projection mode using the VR hook */
+    void setProjectionMode(Projection p);
 
+    /** Sets mouse state */
     void setMouse(const QPoint& pos, bool leftKey, bool rightKey);
+    /** Key-down or up event for a certain key */
+    void setKeyboard(Qt::Key key, bool pressed);
     void setGlobalTime(float ti);
     void setFrameNumber(int);
-    void setTimeDelta(float);
     void setDate(const QDateTime&);
     void setEyeDistance(float);
     void setEyeRotation(float);
@@ -70,8 +77,10 @@ public slots:
     /** Renders the shader to the current gl context.
         This will compile the shader and create all resources if needed.
         On any error, false is returned and errorString() contains
-        the description of the error. */
-    bool render(const QRect& viewPort);
+        the description of the error.
+        If @p continuous is true, the iTimeDelta variable is updated
+        with the true time delta between this and last call. */
+    bool render(const QRect& viewPort, bool continuous);
 
 private slots:
 

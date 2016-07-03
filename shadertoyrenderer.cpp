@@ -9,6 +9,7 @@
 */
 
 #include <iostream>
+#include <chrono>
 
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
@@ -41,6 +42,8 @@ struct ShadertoyRenderer::Private
         : p             (p)
         , resolution    (256, 256)
         , projectionMode(P_RECT)
+        , prevRenderTime(0.)
+        , messuredFps   (0.)
         , api           (new ShadertoyApi(p))
         , context       (nullptr)
         , surface       (nullptr)
@@ -48,11 +51,13 @@ struct ShadertoyRenderer::Private
         , bufIdx        (nullptr)
         , mouseData     (0.f, 0.f, 0.f, 0.f)
         , dateData      (0.f, 0.f, 0.f, 0.f)
+        , keyState      (3 * 256, 0)
+        , isKeyStateChanged(true)
         , globalTime    (0.f)
-        , timeDelta     (0.f)
         , eyeDistance   (0.1f)
         , eyeRotation   (0.0f)
         , frameNumber   (0)
+        , keyTexture    (nullptr)
         , needsRecompile(true)
     {
         connect(api, SIGNAL(textureReceived(QString,QImage)),
@@ -62,11 +67,14 @@ struct ShadertoyRenderer::Private
 
     struct RenderPass;
 
+    static double systemTime();
     bool createGl();
     void destroyGl();
     QOpenGLBuffer* createBuffer(
             QOpenGLBuffer::Type, const void* data, int count);
-    bool render(const QRect& viewPort);
+    QOpenGLTexture* getImageTexture(RenderPass& pass, int idx);
+    QOpenGLTexture* getKeyboardTexture();
+    bool render(const QRect& viewPort, bool continuous);
     bool drawQuad(RenderPass& pass);
 
 
@@ -76,6 +84,7 @@ struct ShadertoyRenderer::Private
         QOpenGLShaderProgram* shader;
         FramebufferObject* fbo;
         QOpenGLTexture* tex[4];
+        bool ownsTexture[4];
         QString src[4], name;
         bool vFlip[4];
         QOpenGLTexture::WrapMode wrapMode[4];
@@ -83,6 +92,7 @@ struct ShadertoyRenderer::Private
         QImage img[4];
         int outputId,
             inputId[4];
+        ShadertoyInput::Type inputType[4];
         RenderPass* inputPass[4];
 
         int mvp_matrix,
@@ -108,6 +118,9 @@ struct ShadertoyRenderer::Private
     QSize resolution;
     Projection projectionMode;
     QString errorStr;
+    double prevRenderTime,
+           deltaRenderTime,
+           messuredFps;
 
     ShadertoyApi* api;
 
@@ -117,13 +130,16 @@ struct ShadertoyRenderer::Private
     QOpenGLBuffer* bufVert, *bufIdx;
     QMatrix4x4 projection;
     QVector4D mouseData, dateData;
-    float globalTime, timeDelta,
+    std::vector<uint8_t> keyState;
+    bool isKeyStateChanged;
+    float globalTime,
         eyeDistance, eyeRotation;
     int frameNumber;
 
     ShadertoyShader shadertoy;
     std::vector<RenderPass> passes;
-
+    QOpenGLTexture* keyTexture;
+    QMap<QString, QOpenGLTexture*> textureMap;
 
     bool needsRecompile;
 };
@@ -136,6 +152,14 @@ const GLfloat ShadertoyRenderer::Private::quadVertices[] =
 const GLushort ShadertoyRenderer::Private::quadIndices[] =
 { 0, 1, 2,
   0, 2, 3 };
+
+double ShadertoyRenderer::Private::systemTime()
+{
+    // XXX This is not much high-res on MinGW or VisualStudio to my experience
+    auto tp = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>
+            (tp.time_since_epoch()).count() * double(0.000000001);
+}
 
 
 ShadertoyRenderer::ShadertoyRenderer(
@@ -169,6 +193,7 @@ bool ShadertoyRenderer::isReady() const
 }
 
 const QString& ShadertoyRenderer::errorString() const { return p_->errorStr; }
+double ShadertoyRenderer::messuredFps() const { return p_->messuredFps; }
 
 void ShadertoyRenderer::setShader(const ShadertoyShader& s)
 {
@@ -192,6 +217,21 @@ void ShadertoyRenderer::setMouse(const QPoint &pos, bool leftKey, bool rightKey)
     p_->mouseData = QVector4D(pos.x(), pos.y(),
                               leftKey ? 1.f : 0.f, rightKey ? 1.f : 0.f);
 }
+
+void ShadertoyRenderer::setKeyboard(Qt::Key qkey, bool pressed)
+{
+    int key = qkey;
+
+
+    if (key < 0 || key > 255)
+        return;
+
+    p_->keyState[key] =
+    p_->keyState[key+256] = pressed ? 255 : 0;
+    p_->keyState[key+512] = 255 - p_->keyState[key+512];
+    p_->isKeyStateChanged = true;
+}
+
 void ShadertoyRenderer::setDate(const QDateTime& dt)
 {
     auto d = dt.date();
@@ -203,9 +243,8 @@ void ShadertoyRenderer::setEyeDistance(float d) { p_->eyeDistance = d; }
 void ShadertoyRenderer::setEyeRotation(float d) { p_->eyeRotation = d; }
 
 void ShadertoyRenderer::setGlobalTime(float ti) { p_->globalTime = ti; }
-void ShadertoyRenderer::setTimeDelta(float ti) { p_->timeDelta = ti; }
 void ShadertoyRenderer::setFrameNumber(int f) { p_->frameNumber = f; }
-void ShadertoyRenderer::setProjection(Projection p)
+void ShadertoyRenderer::setProjectionMode(Projection p)
 {
     if (p_->projectionMode == p)
         return;
@@ -385,7 +424,8 @@ bool ShadertoyRenderer::Private::createGl()
                     rp.wrapMode[inCh] = QOpenGLTexture::Repeat;
 
                 rp.inputId[inCh] = inp.id;
-                ST_DEBUG2("pass(" << pass.name() << "): "
+                rp.inputType[inCh] = inp.type;
+                ST_DEBUG3("pass(" << pass.name() << "): "
                           "input slot " << inCh << " from id " << inp.id);
 
                 if (inp.type == ShadertoyInput::T_TEXTURE
@@ -399,7 +439,7 @@ bool ShadertoyRenderer::Private::createGl()
                 }
                 else if (inp.type == ShadertoyInput::T_BUFFER)
                 {
-                    //ST_DEBUG2("input " << inCh << " = " << inp.id);
+                    //ST_DEBUG3("input " << inCh << " = " << inp.id);
                 }
 
             }
@@ -512,6 +552,7 @@ bool ShadertoyRenderer::Private::createGl()
 
     // -- done --
 
+    prevRenderTime = systemTime();
     needsRecompile = false;
     return true;
 }
@@ -524,9 +565,8 @@ void ShadertoyRenderer::Private::destroyGl()
     if (!context)
         return;
     if (surface)
-    {
         context->makeCurrent(surface);
-    }
+
 
     if (bufIdx && bufIdx->isCreated())
         bufIdx->release();
@@ -538,14 +578,20 @@ void ShadertoyRenderer::Private::destroyGl()
     delete bufVert;
     bufVert = nullptr;
 
+    if (keyTexture && keyTexture->isCreated())
+        keyTexture->release();
+    delete keyTexture;
+    keyTexture = nullptr;
+
+    for (auto t : textureMap)
+    {
+        t->release();
+        delete t;
+    }
+    textureMap.clear();
+
     for (RenderPass& rp : passes)
     {
-        for (int i=0; i<4; ++i)
-        {
-            if (rp.tex[i] && rp.tex[i]->isCreated())
-                rp.tex[i]->destroy();
-            delete rp.tex[i];
-        }
         if (rp.shader && rp.shader->isLinked())
             rp.shader->release();
         delete rp.shader;
@@ -569,9 +615,9 @@ void ShadertoyRenderer::p_onTexture_(const QString &src, const QImage &img)
 }
 
 
-bool ShadertoyRenderer::render(const QRect& v) { return p_->render(v); }
+bool ShadertoyRenderer::render(const QRect& v, bool c) { return p_->render(v, c); }
 
-bool ShadertoyRenderer::Private::render(const QRect& viewPort)
+bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
 {
     ST_DEBUG3("ShadertoyRenderer::Private::render()");
 
@@ -590,13 +636,83 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort)
         return false;
     }
 
+    if (continuous)
+    {
+        double sysTime = systemTime();
+        deltaRenderTime = sysTime - prevRenderTime;
+        prevRenderTime = sysTime;
+        messuredFps = deltaRenderTime > 0. ? 1. / deltaRenderTime : 0.;
+    }
+    else
+    {
+        messuredFps = 0.;
+        deltaRenderTime = 0.;
+    }
+
     ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
                                 viewPort.width(), viewPort.height()) );
-
     bool r = true;
     for (auto& p : passes)
         r &= drawQuad(p);
     return r;
+}
+
+QOpenGLTexture* ShadertoyRenderer::Private::getImageTexture(
+        RenderPass& pass, int idx)
+{
+    if (textureMap.contains(pass.src[idx]))
+        return textureMap.value(pass.src[idx]);
+
+    // image not ready
+    if (pass.img[idx].isNull())
+        return nullptr;
+
+    ST_DEBUG3("pass(" << pass.name
+              << "): create texture from image for slot " << idx);
+
+    auto t = new QOpenGLTexture(
+                pass.vFlip[idx] ? pass.img[idx].mirrored(false, true)
+                              : pass.img[idx],
+                // pass.filterType[idx] == QOpenGLTexture::LinearMipMapLinear ?
+                 QOpenGLTexture::GenerateMipMaps
+                //: QOpenGLTexture::DontGenerateMipMaps
+                );
+    if (!t->isCreated())
+    {
+        ST_ERROR("Could not create texture for image '" << pass.src[idx] << "'");
+        delete t;
+        return nullptr;
+    }
+
+    textureMap.insert(pass.src[idx], t);
+    return t;
+}
+
+QOpenGLTexture* ShadertoyRenderer::Private::getKeyboardTexture()
+{
+    if (!keyTexture)
+    {
+        keyTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+        keyTexture->setFormat(QOpenGLTexture::RGB8_UNorm);
+        keyTexture->setSize(256, 3);
+        keyTexture->allocateStorage();
+        isKeyStateChanged = true;
+    }
+
+    if (!keyTexture->isCreated())
+    {
+        ST_ERROR("keyboard texture could not be allocated");
+        return nullptr;
+    }
+
+    if (isKeyStateChanged)
+    {
+        isKeyStateChanged = false;
+        keyTexture->setData(QOpenGLTexture::Luminance,
+                            QOpenGLTexture::UInt8, &keyState[0]);
+    }
+
+    return keyTexture;
 }
 
 bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
@@ -613,52 +729,72 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     // --- bind textures ---
 
+    GLfloat channelRes[4*3];
+
     for (int i=0; i<4; ++i)
     {
         ST_CHECK_GL( gl->glActiveTexture(GL_TEXTURE0 + i) );
+        channelRes[i*3+0] = 0.f;
+        channelRes[i*3+1] = 0.f;
+        channelRes[i*3+2] = 1.f;
 
-        if (auto opass = pass.inputPass[i])
+        switch (pass.inputType[i])
         {
-            ST_DEBUG3("pass(" << pass.name << ") input-pass slot " << i << " assigned");
-            if (opass->fbo)
-            {
-                int texName = opass->fbo->readableTexture();
-                if (texName >= 0)
+            case ShadertoyInput::T_KEYBOARD:
+                pass.tex[i] = getKeyboardTexture();
+            break;
+
+            case ShadertoyInput::T_TEXTURE:
+                if (!pass.tex[i])
+                    pass.tex[i] = getImageTexture(pass, i);
+            break;
+
+            case ShadertoyInput::T_BUFFER:
+                if (auto opass = pass.inputPass[i])
                 {
-                    ST_DEBUG3("pass(" << pass.name
-                              << ") bind (" << opass->name << ").fbo[id="
-                              << pass.inputId[i] << ", tex=" << texName
-                              << "] to slot " << i);
-                    ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D, texName) );
+                    ST_DEBUG3("pass(" << pass.name << ") input-pass slot "
+                              << i << " assigned");
+                    if (opass->fbo)
+                    {
+                        int texName = opass->fbo->readableTexture();
+                        if (texName >= 0)
+                        {
+                            /// @todo Need to set mag-filter setting
+                            ST_DEBUG3("pass(" << pass.name
+                                      << ") bind (" << opass->name << ").fbo[id="
+                                      << pass.inputId[i] << ", tex=" << texName
+                                      << "] to slot " << i);
+                            ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D, texName) );
+                            channelRes[i*3+0] = opass->fbo->size().width();
+                            channelRes[i*3+1] = opass->fbo->size().height();
+                            channelRes[i*3+2] = opass->fbo->size().height() > 0 ?
+                                                GLfloat(opass->fbo->size().width())
+                                                    / opass->fbo->size().height() : 0.f;
+                        }
+                    }
+                    continue;
                 }
-            }
-            continue;
-        }
-
-        if (pass.tex[i] == nullptr
-            && !pass.img[i].isNull())
-        {
-            ST_DEBUG3("create texture from image for slot" << i);
-
-            pass.tex[i] = new QOpenGLTexture(
-                        pass.vFlip[i] ? pass.img[i].mirrored(false, true)
-                                      : pass.img[i],
-                        pass.filterType[i] == QOpenGLTexture::LinearMipMapLinear
-                        ? QOpenGLTexture::GenerateMipMaps
-                        : QOpenGLTexture::DontGenerateMipMaps
-                        );
-            ST_CHECK_GL( pass.tex[i]->setMinMagFilters(
-                             pass.filterType[i],
-                             pass.filterType[i] == QOpenGLTexture::Nearest
-                             ? QOpenGLTexture::Nearest : QOpenGLTexture::Linear) );
-            ST_CHECK_GL( pass.tex[i]->setWrapMode(pass.wrapMode[i]) );
+            break;
         }
 
         if (!pass.tex[i])
             continue;
 
-        ST_DEBUG3("bind texture to slot" << i);
-        pass.tex[i]->bind();
+        channelRes[i*3+0] = pass.tex[i]->width();
+        channelRes[i*3+1] = pass.tex[i]->height();
+        channelRes[i*3+2] = pass.tex[i]->height() > 0 ?
+                            GLfloat(pass.tex[i]->width()) / pass.tex[i]->height() : 0.f;
+
+        ST_DEBUG3("pass(" << pass.name << "): bind texture "
+                  << pass.tex[i] << " to slot " << i);
+        ST_CHECK_GL( pass.tex[i]->bind() );
+
+        ST_CHECK_GL( pass.tex[i]->setMinMagFilters(
+                         pass.filterType[i],
+                         pass.filterType[i] == QOpenGLTexture::Nearest
+                         ? QOpenGLTexture::Nearest : QOpenGLTexture::Linear) );
+        ST_CHECK_GL( pass.tex[i]->setWrapMode(pass.wrapMode[i]) );
+
     }
 
 
@@ -678,7 +814,6 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     // --- update attributes and uniforms ---
 
-
     pass.shader->setUniformValue(pass.mvp_matrix, projection);
     pass.shader->setUniformValue(pass.iResolution,
                                  float(resolution.width()),
@@ -687,10 +822,11 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     pass.shader->setUniformValue(pass.iMouse, mouseData);
     pass.shader->setUniformValue(pass.iGlobalTime, globalTime);
     pass.shader->setUniformValue(pass.iFrame, frameNumber);
-    pass.shader->setUniformValue(pass.iTimeDelta, timeDelta);
+    pass.shader->setUniformValue(pass.iTimeDelta, float(deltaRenderTime));
     pass.shader->setUniformValue(pass.iDate, dateData);
-    pass.shader->setUniformValue(pass.iEyeMod,
-                                 eyeDistance, eyeRotation);
+    pass.shader->setUniformValue(pass.iEyeMod, eyeDistance, eyeRotation);
+    pass.shader->setUniformValueArray(
+                pass.iChannelResolution, channelRes, 4, 3);
 
     // -- bind vertex array --
 

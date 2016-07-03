@@ -73,7 +73,7 @@ struct Log
 #   define ST_DEBUG_CTOR(unused__) { }
 #endif
 
-#if 1 && !defined(NDEBUG)
+#if 0 && !defined(NDEBUG)
 #   define ST_DEBUG3(arg__)     ST_LOG_IMPL_(::Log::L_DEBUG, "DEBUG", arg__)
 #else
 #   define ST_DEBUG3(unused__) { }

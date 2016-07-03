@@ -23,6 +23,7 @@
 #include "shadertoyrenderwidget.h"
 #include "shadertoyrenderer.h"
 #include "shadertoyshader.h"
+#include "log.h"
 
 struct ShadertoyRenderWidget::Private
 {
@@ -62,7 +63,8 @@ ShadertoyRenderWidget::ShadertoyRenderWidget(QWidget *parent)
     : QOpenGLWidget     (parent)
     , p_                (new Private(this))
 {
-    setMinimumSize(640, 384);
+    setMinimumSize(640, 360);
+    setFocusPolicy(Qt::StrongFocus);
 }
 
 ShadertoyRenderWidget::~ShadertoyRenderWidget()
@@ -122,12 +124,17 @@ void ShadertoyRenderWidget::rerender()
         update();
 }
 
-float ShadertoyRenderWidget::playbackTime() const
+double ShadertoyRenderWidget::playbackTime() const
 {
     if (p_->isPlaying)
-        return p_->timeOffset + float(p_->timeMessure.elapsed()) / 1000.f;
+        return p_->timeOffset + double(p_->timeMessure.elapsed()) / 1000.;
     else
         return p_->pauseTime;
+}
+
+double ShadertoyRenderWidget::messuredFps() const
+{
+    return p_->render ? p_->render->messuredFps() : 0.;
 }
 
 /*
@@ -164,7 +171,27 @@ void ShadertoyRenderWidget::mouseReleaseEvent(QMouseEvent*)
     rerender();
 }
 
+void ShadertoyRenderWidget::keyPressEvent(QKeyEvent* e)
+{
+    if (p_->render)
+    {
+        p_->render->setKeyboard(Qt::Key(e->key()), true);
+        rerender();
+    }
+    else
+        QWidget::keyPressEvent(e);
+}
 
+void ShadertoyRenderWidget::keyReleaseEvent(QKeyEvent* e)
+{
+    if (p_->render)
+    {
+        p_->render->setKeyboard(Qt::Key(e->key()), false);
+        rerender();
+    }
+    else
+        QWidget::keyReleaseEvent(e);
+}
 
 void ShadertoyRenderWidget::initializeGL()
 {
@@ -199,7 +226,7 @@ void ShadertoyRenderWidget::paintGL()
     p_->hasNewShader = false;
 
     p_->render->setResolution(size());
-    p_->render->setProjection(p_->projectMode);
+    p_->render->setProjectionMode(p_->projectMode);
     p_->render->setGlobalTime(playbackTime());
     p_->render->setFrameNumber(p_->frame++);
     p_->render->setMouse(p_->mousePos, p_->mouseKeys & Qt::LeftButton,
@@ -208,7 +235,7 @@ void ShadertoyRenderWidget::paintGL()
 
     bool r = false;
     if (p_->tryRender)
-        r = p_->render->render(rect());
+        r = p_->render->render(rect(), p_->isPlaying);
 
     if (!r)
     {
@@ -268,13 +295,24 @@ QWidget* ShadertoyRenderWidget::createPlaybar(QWidget*parent)
 
         lh->addStretch();
 
-        auto timeLabel = new QLabel(container);
-        timeLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-        lh->addWidget(timeLabel);
+        // time label
+        auto label = new QLabel(container);
+        label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+        lh->addWidget(label);
         connect(this, &ShadertoyRenderWidget::frameSwapped,
                 [=]()
         {
-            timeLabel->setText(QString("%1").arg(playbackTime()));
+            label->setText(QString("%1").arg(playbackTime()));
+        });
+
+        // fps label
+        label = new QLabel(container);
+        label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+        lh->addWidget(label);
+        connect(this, &ShadertoyRenderWidget::frameSwapped,
+                [=]()
+        {
+            label->setText(QString("%1 fps").arg(messuredFps()));
         });
 
     return container;
