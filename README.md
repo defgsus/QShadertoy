@@ -5,3 +5,5 @@ This is a Qt-based desktop application for downloading, managing and rendering p
 It's under development and currently supports not all features.
 
 License: MIT
+
+![Screenshot](./screenshot.png)
