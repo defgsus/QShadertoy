@@ -17,7 +17,7 @@
 #include <QVector>
 #include <QDateTime>
 
-#include "tableplotview.h"
+#include "TablePlotView.h"
 #include "log.h"
 
 struct TablePlotView::Private

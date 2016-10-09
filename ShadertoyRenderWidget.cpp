@@ -20,9 +20,9 @@
 #include <QLayout>
 #include <QComboBox>
 
-#include "shadertoyrenderwidget.h"
-#include "shadertoyrenderer.h"
-#include "shadertoyshader.h"
+#include "ShadertoyRenderwidget.h"
+#include "ShadertoyRenderer.h"
+#include "ShadertoyShader.h"
 #include "log.h"
 
 struct ShadertoyRenderWidget::Private

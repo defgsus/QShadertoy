@@ -12,7 +12,7 @@
 #include <QTextBrowser>
 #include <QTimer>
 
-#include "logview.h"
+#include "LogView.h"
 #include "log.h"
 
 struct LogView::Private

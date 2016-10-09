@@ -15,7 +15,7 @@
 #include <QMainWindow>
 #include <QByteArray>
 
-#include "settings.h"
+#include "Settings.h"
 
 namespace { static Settings* instance_ = nullptr; }
 

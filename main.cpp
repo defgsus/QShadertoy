@@ -8,7 +8,7 @@
     <p>created 5/30/2016</p>
 */
 
-#include "mainwindow.h"
+#include "MainWindow.h"
 #include <QApplication>
 
 int main(int argc, char *argv[])

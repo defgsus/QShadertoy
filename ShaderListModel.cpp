@@ -11,9 +11,9 @@
 #include <QList>
 #include <QColor>
 
-#include "shaderlistmodel.h"
-#include "shadertoyapi.h"
-#include "shadertoyshader.h"
+#include "ShaderListModel.h"
+#include "ShadertoyApi.h"
+#include "ShadertoyShader.h"
 #include "log.h"
 
 struct ShaderListModel::Private

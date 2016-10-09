@@ -31,9 +31,9 @@
 #include <QRegExp>
 #include <QThread>
 
-#include "shadertoyapi.h"
-#include "shadertoyshader.h"
-#include "settings.h"
+#include "ShadertoyApi.h"
+#include "ShadertoyShader.h"
+#include "Settings.h"
 #include "log.h"
 
 struct ShadertoyApi::Private

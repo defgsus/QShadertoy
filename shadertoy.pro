@@ -18,30 +18,33 @@ CONFIG(release, debug|release) {
 }
 
 SOURCES += main.cpp\
-        mainwindow.cpp \
-    shadertoyapi.cpp \
-    shadertoyshader.cpp \
-    shadertoyrenderer.cpp \
-    shaderlistmodel.cpp \
-    settings.cpp \
-    shadersortmodel.cpp \
-    renderpassview.cpp \
-    shadertoyrenderwidget.cpp \
     log.cpp \
-    logview.cpp \
-    tableplotview.cpp \
-    framebufferobject.cpp
+    ShadertoyShaderInput.cpp \
+    FramebufferObject.cpp \
+    LogView.cpp \
+    MainWindow.cpp \
+    RenderpassView.cpp \
+    Settings.cpp \
+    ShaderListModel.cpp \
+    ShaderSortModel.cpp \
+    ShadertoyApi.cpp \
+    ShadertoyRenderer.cpp \
+    ShadertoyRenderWidget.cpp \
+    ShadertoyShader.cpp \
+    TablePlotView.cpp \
+    ShadertoyRenderPass.cpp
 
-HEADERS  += mainwindow.h \
-    shadertoyapi.h \
-    shadertoyshader.h \
-    shadertoyrenderer.h \
-    shaderlistmodel.h \
-    settings.h \
-    shadersortmodel.h \
-    renderpassview.h \
-    shadertoyrenderwidget.h \
+HEADERS  += \
     log.h \
-    logview.h \
-    tableplotview.h \
-    framebufferobject.h
+    FramebufferObject.h \
+    LogView.h \
+    MainWindow.h \
+    RenderpassView.h \
+    Settings.h \
+    ShaderListModel.h \
+    ShaderSortModel.h \
+    ShadertoyApi.h \
+    ShadertoyRenderer.h \
+    ShadertoyRenderwidget.h \
+    ShadertoyShader.h \
+    TablePlotView.h

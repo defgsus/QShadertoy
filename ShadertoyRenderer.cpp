@@ -28,10 +28,10 @@
 #include <QCameraInfo>
 #include <QCameraImageCapture>
 
-#include "shadertoyrenderer.h"
-#include "shadertoyshader.h"
-#include "shadertoyapi.h"
-#include "framebufferobject.h"
+#include "ShadertoyRenderer.h"
+#include "ShadertoyShader.h"
+#include "ShadertoyApi.h"
+#include "FramebufferObject.h"
 #include "log.h"
 
 #define ST_RENDER_ERROR(qstring__) \
@@ -387,7 +387,7 @@ bool ShadertoyRenderer::Private::createGl()
         {
             fragSrc1b += "uniform sampler";
             if (j < pass.numInputs()
-                && pass.input(j).type == ShadertoyInput::T_CUBEMAP)
+                && pass.input(j).type() == ShadertoyInput::T_CUBEMAP)
                 fragSrc1b += "Cube";
             else
                 fragSrc1b += "2D";
@@ -427,30 +427,30 @@ bool ShadertoyRenderer::Private::createGl()
                 auto inp = pass.input(inCh);
                 //ST_INFO(inp.toString());
 
-                rp.src[inCh] = inp.src;
-                rp.vFlip[inCh] = inp.vFlip;
-                if (inp.filterType == ShadertoyInput::F_NEAREST)
+                rp.src[inCh] = inp.source();
+                rp.vFlip[inCh] = inp.vFlip();
+                if (inp.filterType() == ShadertoyInput::F_NEAREST)
                     rp.filterType[inCh] = QOpenGLTexture::Nearest;
-                else if (inp.filterType == ShadertoyInput::F_MIPMAP)
+                else if (inp.filterType() == ShadertoyInput::F_MIPMAP)
                     rp.filterType[inCh] = QOpenGLTexture::LinearMipMapLinear;
-                if (inp.wrapMode == ShadertoyInput::W_REPEAT)
+                if (inp.wrapMode() == ShadertoyInput::W_REPEAT)
                     rp.wrapMode[inCh] = QOpenGLTexture::Repeat;
 
-                rp.inputId[inCh] = inp.id;
-                rp.inputType[inCh] = inp.type;
+                rp.inputId[inCh] = inp.id();
+                rp.inputType[inCh] = inp.type();
                 ST_DEBUG3("pass(" << pass.name() << "): "
                           "input slot " << inCh << " from id " << inp.id);
 
-                if (inp.type == ShadertoyInput::T_TEXTURE
-                || inp.type == ShadertoyInput::T_CUBEMAP)
+                if (inp.type() == ShadertoyInput::T_TEXTURE
+                || inp.type() == ShadertoyInput::T_CUBEMAP)
                 {                    
-                    if (!queried.contains(inp.src))
+                    if (!queried.contains(inp.source()))
                     {
-                        api->getAsset(inp.src);
-                        queried.insert(inp.src);
+                        api->getAsset(inp.source());
+                        queried.insert(inp.source());
                     }
                 }
-                else if (inp.type == ShadertoyInput::T_BUFFER)
+                else if (inp.type() == ShadertoyInput::T_BUFFER)
                 {
                     //ST_DEBUG3("input " << inCh << " = " << inp.id);
                 }
@@ -716,6 +716,8 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
         switch (pass.inputType[i])
         {
+            case ShadertoyInput::T_NONE: break;
+
             case ShadertoyInput::T_KEYBOARD:
                 pass.tex[i] = getKeyboardTexture();
             break;

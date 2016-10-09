@@ -21,16 +21,16 @@
 #include <QAction>
 #include <QProgressBar>
 
-#include "mainwindow.h"
-#include "shadertoyapi.h"
-#include "shadertoyshader.h"
-#include "shaderlistmodel.h"
-#include "shadersortmodel.h"
-#include "renderpassview.h"
-#include "shadertoyrenderwidget.h"
-#include "tableplotview.h"
-#include "settings.h"
-#include "logview.h"
+#include "MainWindow.h"
+#include "ShadertoyApi.h"
+#include "ShadertoyShader.h"
+#include "ShaderListModel.h"
+#include "ShaderSortModel.h"
+#include "RenderpassView.h"
+#include "ShadertoyRenderwidget.h"
+#include "TablePlotView.h"
+#include "Settings.h"
+#include "LogView.h"
 
 struct MainWindow::Private
 {

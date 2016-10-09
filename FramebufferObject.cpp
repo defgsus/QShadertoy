@@ -10,7 +10,7 @@
 
 #include <QOpenGLFunctions>
 
-#include "framebufferobject.h"
+#include "FramebufferObject.h"
 #include "log.h"
 
 

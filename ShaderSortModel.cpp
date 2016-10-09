@@ -8,9 +8,9 @@
     <p>created 5/31/2016</p>
 */
 
-#include "shadersortmodel.h"
-#include "shaderlistmodel.h"
-#include "shadertoyshader.h"
+#include "ShaderSortModel.h"
+#include "ShaderListModel.h"
+#include "ShadertoyShader.h"
 
 ShaderSortModel::ShaderSortModel(QObject *parent)
     : QSortFilterProxyModel (parent)

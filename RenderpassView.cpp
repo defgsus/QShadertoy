@@ -21,9 +21,9 @@
 #include <QPixmap>
 #include <QMap>
 
-#include "renderpassview.h"
-#include "shadertoyshader.h"
-#include "shadertoyapi.h"
+#include "RenderpassView.h"
+#include "ShadertoyShader.h"
+#include "ShadertoyApi.h"
 #include "log.h"
 
 struct RenderPassView::Private
@@ -115,13 +115,13 @@ void RenderPassView::Private::createWidgets()
 
             iw.filter = new QComboBox(p);
             iw.filter->addItem(
-                        ShadertoyInput::nameForType(ShadertoyInput::F_NEAREST),
+                        tr("nearest"),
                         (int)ShadertoyInput::F_NEAREST);
             iw.filter->addItem(
-                        ShadertoyInput::nameForType(ShadertoyInput::F_LINEAR),
+                        tr("linear"),
                         (int)ShadertoyInput::F_LINEAR);
             iw.filter->addItem(
-                        ShadertoyInput::nameForType(ShadertoyInput::F_MIPMAP),
+                        tr("mipmap"),
                         (int)ShadertoyInput::F_MIPMAP);
             connect(iw.filter, static_cast<void(QComboBox::*)(int)>
                     (&QComboBox::currentIndexChanged),
@@ -130,10 +130,10 @@ void RenderPassView::Private::createWidgets()
 
             iw.wrap = new QComboBox(p);
             iw.wrap->addItem(
-                        ShadertoyInput::nameForType(ShadertoyInput::W_CLAMP),
+                        tr("clamp"),
                         (int)ShadertoyInput::W_CLAMP);
             iw.wrap->addItem(
-                        ShadertoyInput::nameForType(ShadertoyInput::W_REPEAT),
+                        tr("repeat"),
                         (int)ShadertoyInput::W_REPEAT);
             connect(iw.wrap, static_cast<void(QComboBox::*)(int)>
                     (&QComboBox::currentIndexChanged),
@@ -190,9 +190,9 @@ void RenderPassView::setShader(const ShadertoyShader& s)
         for (size_t j=0; j<rp.numInputs(); ++j)
         {
             const ShadertoyInput& inp = rp.input(j);
-            if (inp.type != ShadertoyInput::T_MUSICSTREAM)
+            if (inp.type() != ShadertoyInput::T_MUSICSTREAM)
             {
-                p_->getPixmap(inp.src);
+                p_->getPixmap(inp.source());
             }
         }
     }
@@ -233,7 +233,7 @@ void RenderPassView::Private::selectTab(int idx)
         iw.imgLabel->clear();
         iw.src.clear();
 
-        if (i >= rp.numInputs() || rp.input(i).isNull())
+        if (i >= rp.numInputs() || !rp.input(i).isValid())
         {
             iw.desc->setText("-");
             iw.filter->setEnabled(false);
@@ -249,17 +249,17 @@ void RenderPassView::Private::selectTab(int idx)
             iw.vFlip->setEnabled(inp.hasVFlipSetting());
 
             iw.desc->setText(inp.typeName());
-            iw.vFlip->setChecked(inp.vFlip);
+            iw.vFlip->setChecked(inp.vFlip());
 
             iw.filter->setCurrentText(inp.filterTypeName());
             iw.wrap->setCurrentText(inp.wrapModeName());
 
-            iw.src = inp.src;
-            if (inp.type == ShadertoyInput::T_TEXTURE
-              || inp.type == ShadertoyInput::T_CUBEMAP
-              || inp.type == ShadertoyInput::T_BUFFER)
+            iw.src = inp.source();
+            if (inp.type() == ShadertoyInput::T_TEXTURE
+              || inp.type() == ShadertoyInput::T_CUBEMAP
+              || inp.type() == ShadertoyInput::T_BUFFER)
             {
-                iw.imgLabel->setPixmap( getPixmap(inp.src) );
+                iw.imgLabel->setPixmap( getPixmap(iw.src) );
             }
         }
     }
@@ -311,11 +311,11 @@ void RenderPassView::Private::inputsEdited()
     for (size_t i=0; i<pass.numInputs(); ++i)
     {
         auto inp = pass.input(i);
-        inp.vFlip = inputWidgets[i].vFlip->isChecked();
-        inp.wrapMode = (ShadertoyInput::WrapMode)
-                inputWidgets[i].wrap->currentData().toInt();
-        inp.filterType = (ShadertoyInput::FilterType)
-                inputWidgets[i].filter->currentData().toInt();
+        inp.setVFlip( inputWidgets[i].vFlip->isChecked() );
+        inp.setWrapMode( (ShadertoyInput::WrapMode)
+                inputWidgets[i].wrap->currentData().toInt() );
+        inp.setFilterType( (ShadertoyInput::FilterType)
+                inputWidgets[i].filter->currentData().toInt() );
         pass.setInput(i, inp);
     }
     shader.setRenderPass(idx, pass);

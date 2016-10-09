@@ -16,8 +16,10 @@
 #include <QJsonObject>
 #include <QVector>
 
-struct ShadertoyInput
+/** Json-wrapper for a shadertoy input */
+class ShadertoyInput
 {
+public:
     enum Type
     {
         T_NONE,
@@ -31,7 +33,6 @@ struct ShadertoyInput
         T_MUSIC,
         T_MUSICSTREAM
     };
-    static QString nameForType(Type);
 
     enum FilterType
     {
@@ -39,37 +40,54 @@ struct ShadertoyInput
         F_LINEAR,
         F_MIPMAP
     };
-    static QString nameForType(FilterType);
 
     enum WrapMode
     {
         W_CLAMP,
         W_REPEAT
     };
-    static QString nameForType(WrapMode);
 
-    int channel, id;
-    Type type;
-    FilterType filterType;
-    WrapMode wrapMode;
-    bool vFlip;
-    QString src;
+    const QJsonObject& jsonData() const { return p_json; }
 
-    bool isNull() const { return type == T_NONE; }
-    QString typeName() const { return nameForType(type); }
-    QString filterTypeName() const { return nameForType(filterType); }
-    QString wrapModeName() const { return nameForType(wrapMode); }
+    bool isValid() const { return type() != T_NONE; }
+
+    int channel() const;
+    int id() const;
+    Type type() const;
+    FilterType filterType() const;
+    WrapMode wrapMode() const;
+    bool vFlip() const;
+    QString source() const;
+    QString typeName() const;
+    QString filterTypeName() const;
+    QString wrapModeName() const;
 
     bool hasFilterSetting() const;
     bool hasWrapSetting() const;
     bool hasVFlipSetting() const;
 
-
     /** Description */
     QString toString() const;
+
+    // --- setter ---
+
+    void setJsonData(const QJsonObject& o) { p_json = o; }
+
+    void setChannel(int);
+    void setId(int);
+    void setType(Type);
+    void setFilterType(FilterType);
+    void setWrapMode(WrapMode);
+    void setVFlip(bool);
+    void setSource(const QString&);
+
+private:
+    QJsonObject p_json;
 };
 
 
+
+/** Json-wrapper for a single render pass */
 class ShadertoyRenderPass
 {
 public:
@@ -77,40 +95,45 @@ public:
     /** Order matters for correct execution order */
     enum Type
     {
-        T_BUFFER = 0,
-        T_IMAGE = 1,
-        T_SOUND = 2
+        T_NONE = 0,
+        T_BUFFER = 1,
+        T_IMAGE = 2,
+        T_SOUND = 3
     };
-    static QString nameForType(Type);
+
+    ShadertoyRenderPass();
 
     // ----- getter -----
 
-    const QJsonObject& jsonData() const { return p_data_; }
+    const QJsonObject& jsonData() const { return p_json; }
 
-    Type type() const { return p_type_; }
-    QString typeName() const { return nameForType(p_type_); }
-    QString name() const { return p_name_; }
-    int outputId() const { return p_outputId_; }
+    bool isValid() const { return type() != T_NONE; }
 
-    size_t numInputs() const { return p_inputs_.size(); }
-    const ShadertoyInput& input(size_t idx) const { return p_inputs_[idx]; }
+    Type type() const;
+    QString typeName() const;
+    QString name() const;
+    int outputId() const;
+    const QString& fragmentSource() const;
 
-    const QString& fragmentSource() const { return p_code_; }
+    size_t numInputs() const { return p_inputs.size(); }
+    const ShadertoyInput& input(size_t idx) const { return p_inputs[idx]; }
 
 
     // ----- setter -----
+
+    void setJsonData(const QJsonObject& o);
 
     void setFragmentSource(const QString&);
     void setInput(size_t idx, const ShadertoyInput& );
 
 private:
     friend class ShadertoyShader;
-    QJsonObject p_data_;
-    QString p_code_, p_name_;
-    Type p_type_;
-    int p_outputId_;
-    QVector<ShadertoyInput> p_inputs_;
+    QJsonObject p_json;
+    QVector<ShadertoyInput> p_inputs;
+    QString p_fragSrc;
 };
+
+
 
 /** Info about a shader */
 struct ShadertoyShaderInfo
@@ -131,6 +154,8 @@ struct ShadertoyShaderInfo
          usesKeyboard;
 };
 
+
+/** Json-wrapper for a shadertoy program */
 class ShadertoyShader
 {
 public:
@@ -140,7 +165,7 @@ public:
 
     bool isValid() const { return !p_passes_.isEmpty() && p_error_.isEmpty(); }
 
-    const QJsonObject& jsonData() { return p_data_; }
+    const QJsonObject& jsonData() { return p_json; }
 
     const ShadertoyShaderInfo& info() const { return p_info_; }
 
@@ -157,7 +182,7 @@ public:
     void setRenderPass(size_t index, const ShadertoyRenderPass& pass);
 
 private:
-    QJsonObject p_data_;
+    QJsonObject p_json;
     QVector<ShadertoyRenderPass> p_passes_;
     QString p_error_;
     ShadertoyShaderInfo p_info_;
