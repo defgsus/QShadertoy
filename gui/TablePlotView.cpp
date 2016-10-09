@@ -18,7 +18,7 @@
 #include <QDateTime>
 
 #include "TablePlotView.h"
-#include "log.h"
+#include "core/log.h"
 
 struct TablePlotView::Private
 {

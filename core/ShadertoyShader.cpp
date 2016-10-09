@@ -124,8 +124,14 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
         }
     }
 
+    return true;
+}
+
+QVector<ShadertoyRenderPass> ShadertoyShader::sortedRenderPasses() const
+{
+    auto passes = p_passes_;
     // sort for correct execution order
-    qSort(p_passes_.begin(), p_passes_.end(),
+    qSort(passes.begin(), passes.end(),
           [](const ShadertoyRenderPass& l, const ShadertoyRenderPass& r)
     {
         // sorts "Buf X" alphabetically
@@ -134,8 +140,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
         // otherwise by type
         return l.type() < r.type();
     });
-
-    return true;
+    return passes;
 }
 
 bool ShadertoyShader::containsString(const QString& s) const
@@ -159,13 +164,17 @@ bool ShadertoyShader::containsString(const QString& s) const
 void ShadertoyShader::setRenderPass(
         size_t index, const ShadertoyRenderPass &pass)
 {
-    // XXX Todo: append or insert
-    if ((int)index >= p_passes_.size())
-        return;
+    auto rp = p_json.value("renderpass").toArray();
 
+    // XXX Todo: append or insert
+    if ((int)index >= rp.size())
+    {
+        ST_WARN("ShadertoyShader::setRenderPass("<<index<<") out of range");
+        return;
+    }
+
+    p_passes_.resize(std::max(p_passes_.size(), (int)index+1));
     p_passes_[index] = pass;
 
-    auto rp = p_json.value("renderpass").toArray();
-    if ((int)index < rp.count())
-        rp[index] = pass.jsonData();
+    rp[index] = pass.jsonData();
 }

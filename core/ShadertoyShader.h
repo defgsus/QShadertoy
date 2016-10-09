@@ -173,6 +173,8 @@ public:
     const ShadertoyRenderPass& renderPass(size_t idx) const
         { return p_passes_[idx]; }
 
+    QVector<ShadertoyRenderPass> sortedRenderPasses() const;
+
     bool containsString(const QString&) const;
 
     // ----- setter -----

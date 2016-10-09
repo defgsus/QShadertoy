@@ -33,7 +33,6 @@
 
 #include "ShadertoyApi.h"
 #include "ShadertoyShader.h"
-#include "Settings.h"
 #include "log.h"
 
 struct ShadertoyApi::Private

@@ -22,9 +22,9 @@
 #include <QMap>
 
 #include "RenderpassView.h"
-#include "ShadertoyShader.h"
-#include "ShadertoyApi.h"
-#include "log.h"
+#include "core/ShadertoyShader.h"
+#include "core/ShadertoyApi.h"
+#include "core/log.h"
 
 struct RenderPassView::Private
 {

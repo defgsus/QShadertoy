@@ -14,7 +14,7 @@
 #include <iostream>
 
 #include <QString>
-#include <QTextStream>
+#include <QDebug>
 
 /** Namespace for static functions for logging. */
 struct Log
@@ -49,7 +49,8 @@ struct Log
 #ifdef NDEBUG
     /** Implementation of macro stream logging */
     #define ST_LOG_IMPL_(level__, prefix_unused__, arg__) \
-      { ::QString s__; QTextStream ts__(&s__); ts__ << arg__ << "\n"; \
+      { ::QString s__; QDebug ts__(&s__); \
+        ts__.noquote().nospace() << arg__ << "\n"; \
         ::Log::print(s__, level__); }
 #else
     #define ST_LOG_IMPL_(level__, prefix__, arg__) \

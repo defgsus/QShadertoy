@@ -162,7 +162,6 @@ void ShadertoyInput::setType(Type t)
 {
     switch (t)
     {
-        default:
         case ShadertoyInput::T_TEXTURE:
             p_json.insert("ctype", "texture"); break;
         case ShadertoyInput::T_KEYBOARD:
@@ -181,37 +180,50 @@ void ShadertoyInput::setType(Type t)
             p_json.insert("ctype", "video"); break;
         case ShadertoyInput::T_CUBEMAP:
             p_json.insert("ctype", "cubemap"); break;
+        case ShadertoyInput::T_NONE:
+            return;
     }
 }
 
 void ShadertoyInput::setFilterType(FilterType t)
 {
+    auto sampler = p_json.value("sampler").toObject();
+
     switch (t)
     {
-        default:
         case ShadertoyInput::F_NEAREST:
-            p_json.insert("filter", "nearest"); break;
+            sampler.insert("filter", "nearest"); break;
         case ShadertoyInput::F_LINEAR:
-            p_json.insert("filter", "linear"); break;
+            sampler.insert("filter", "linear"); break;
         case ShadertoyInput::F_MIPMAP:
-            p_json.insert("filter", "mipmap"); break;
+            sampler.insert("filter", "mipmap"); break;
+        default:
+            return;
     }
+    p_json.insert("sampler", sampler);
 }
 
 void ShadertoyInput::setWrapMode(WrapMode m)
 {
+    auto sampler = p_json.value("sampler").toObject();
+
     switch (m)
     {
         case ShadertoyInput::W_CLAMP:
-            p_json.insert("wrap", "clamp"); break;
+            sampler.insert("wrap", "clamp"); break;
         case ShadertoyInput::W_REPEAT:
-            p_json.insert("wrap", "repeat"); break;
+            sampler.insert("wrap", "repeat"); break;
+        default:
+            return;
     }
+    p_json.insert("sampler", sampler);
 }
 
 void ShadertoyInput::setVFlip(bool e)
 {
-    p_json.insert("vflip", e ? "true" : "false");
+    auto sampler = p_json.value("sampler").toObject();
+    sampler.insert("vflip", e ? "true" : "false");
+    p_json.insert("sampler", sampler);
 }
 
 void ShadertoyInput::setSource(const QString& s)

@@ -372,10 +372,10 @@ bool ShadertoyRenderer::Private::createGl()
 
     // --- create shader passes ---
 
-    for (size_t i=0; i<shadertoy.numRenderPasses(); ++i)
-    {
-        const ShadertoyRenderPass& pass = shadertoy.renderPass(i);
+    auto stpasses = shadertoy.sortedRenderPasses();
 
+    for (const ShadertoyRenderPass& pass : stpasses)
+    {
         // XXX todo
         if (pass.type() == ShadertoyRenderPass::T_SOUND)
             continue;

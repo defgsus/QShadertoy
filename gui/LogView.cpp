@@ -13,7 +13,7 @@
 #include <QTimer>
 
 #include "LogView.h"
-#include "log.h"
+#include "core/log.h"
 
 struct LogView::Private
 {

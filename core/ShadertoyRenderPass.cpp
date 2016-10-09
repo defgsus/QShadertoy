@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 #include <QJsonArray>
 
 #include "ShadertoyShader.h"
+#include "log.h"
 
 ShadertoyRenderPass::ShadertoyRenderPass()
     : p_inputs  (4)
@@ -73,10 +74,7 @@ void ShadertoyRenderPass::setJsonData(const QJsonObject& o)
     p_json = o;
     p_fragSrc = p_json.value("code").toString();
 
-    // pre-create empty slots
-    // (because channels in json are randomly ordered)
     p_inputs.clear();
-    p_inputs.resize(4);
 
     auto ins = p_json.value("inputs").toArray();
     for (const QJsonValue& inv : ins)
@@ -84,6 +82,7 @@ void ShadertoyRenderPass::setJsonData(const QJsonObject& o)
         ShadertoyInput inp;
         inp.setJsonData( inv.toObject() );
 
+        p_inputs.resize(std::max(p_inputs.size(), inp.channel()+1));
         p_inputs[inp.channel()] = inp;
     }
 }
@@ -100,12 +99,17 @@ void ShadertoyRenderPass::setInput(size_t idx, const ShadertoyInput& inp)
 
     // Todo: append or insert
     if ((int)idx >= ins.count())
+    {
+        ST_WARN("ShadertoyRenderPass::setInput(" << idx << ") out of range");
         return;
+    }
 
     p_inputs.resize(std::max((int)idx+1, p_inputs.size()));
     p_inputs[idx] = inp;
 
-    ins[idx] = inp.jsonData();
+    for (int i=0; i<ins.size(); ++i)
+        if (ins[idx].toObject().value("channel").toInt() == (int)idx)
+            ins[i] = inp.jsonData();
 }
 
 

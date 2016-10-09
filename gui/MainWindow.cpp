@@ -22,12 +22,12 @@
 #include <QProgressBar>
 
 #include "MainWindow.h"
-#include "ShadertoyApi.h"
-#include "ShadertoyShader.h"
-#include "ShaderListModel.h"
-#include "ShaderSortModel.h"
+#include "core/ShadertoyApi.h"
+#include "core/ShadertoyShader.h"
+#include "core/ShaderListModel.h"
+#include "core/ShaderSortModel.h"
 #include "RenderpassView.h"
-#include "ShadertoyRenderwidget.h"
+#include "ShadertoyRenderWidget.h"
 #include "TablePlotView.h"
 #include "Settings.h"
 #include "LogView.h"
@@ -144,7 +144,8 @@ void MainWindow::Private::createWidgets()
             lh->addLayout(lv1, 3);
 
                 auto tab = new QTabWidget(win);
-                tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+                tab->setSizePolicy(
+                            QSizePolicy::Expanding, QSizePolicy::Expanding);
                 lv1->addWidget(tab);
 
                     passView = new RenderPassView(win);
