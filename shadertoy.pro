@@ -17,6 +17,21 @@ CONFIG(release, debug|release) {
     DEFINES += NDEBUG
 }
 
+HEADERS  += \
+    log.h \
+    FramebufferObject.h \
+    LogView.h \
+    MainWindow.h \
+    RenderpassView.h \
+    Settings.h \
+    ShaderListModel.h \
+    ShaderSortModel.h \
+    ShadertoyApi.h \
+    ShadertoyRenderer.h \
+    ShadertoyRenderwidget.h \
+    ShadertoyShader.h \
+    TablePlotView.h
+
 SOURCES += main.cpp\
     log.cpp \
     ShadertoyShaderInput.cpp \
@@ -34,17 +49,7 @@ SOURCES += main.cpp\
     TablePlotView.cpp \
     ShadertoyRenderPass.cpp
 
-HEADERS  += \
-    log.h \
-    FramebufferObject.h \
-    LogView.h \
-    MainWindow.h \
-    RenderpassView.h \
-    Settings.h \
-    ShaderListModel.h \
-    ShaderSortModel.h \
-    ShadertoyApi.h \
-    ShadertoyRenderer.h \
-    ShadertoyRenderwidget.h \
-    ShadertoyShader.h \
-    TablePlotView.h
+DISTFILES += \
+    .gitignore \
+    README.md \
+    LICENSE.txt
