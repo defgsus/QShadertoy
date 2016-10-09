@@ -85,6 +85,7 @@ public slots:
 private slots:
 
     void p_onTexture_(const QString& src, const QImage& img);
+    void p_onAsset_(const QString& src);
 
 private:
     struct Private;

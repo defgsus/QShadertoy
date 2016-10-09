@@ -274,7 +274,7 @@ QPixmap RenderPassView::Private::getPixmap(const QString& src)
     if (pixmaps.contains(src))
         return pixmaps[src];
 
-    api->getTexture(src);
+    api->getAsset(src);
     return QPixmap(64, 64);
 }
 

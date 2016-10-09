@@ -44,6 +44,8 @@ signals:
     void shaderReceived(const QString& id);
     /** A texture has been downloaded or loaded from cache */
     void textureReceived(const QString& src, const QImage&);
+    /** A non-texture has been downloaded or loaded from cache */
+    void assetReceived(const QString& src);
 
     void downloadProgress(double percent);
     void mergeFinished();
@@ -61,8 +63,10 @@ public slots:
         or is in shaderIds() and not valid. */
     void mergeWithWeb();
 
-    /** Download a texture or load from cache */
-    void getTexture(const QString& src);
+    /** Download an asset or load from cache.
+        If it's an image, textureReceived() will be emitted.
+        Otherwise assetReceived() is emitted. */
+    void getAsset(const QString& src);
 
     void stopRequests();
 

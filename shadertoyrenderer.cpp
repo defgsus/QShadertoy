@@ -70,6 +70,9 @@ struct ShadertoyRenderer::Private
         connect(api, SIGNAL(textureReceived(QString,QImage)),
                 p, SLOT(p_onTexture_(QString,QImage)),
                 Qt::QueuedConnection);
+        connect(api, SIGNAL(assetReceived(QString)),
+                p, SLOT(p_onAsset_(QString)),
+                Qt::QueuedConnection);
     }
 
     struct RenderPass;
@@ -443,7 +446,7 @@ bool ShadertoyRenderer::Private::createGl()
                 {                    
                     if (!queried.contains(inp.src))
                     {
-                        api->getTexture(inp.src);
+                        api->getAsset(inp.src);
                         queried.insert(inp.src);
                     }
                 }
@@ -629,6 +632,18 @@ void ShadertoyRenderer::p_onTexture_(const QString &src, const QImage &img)
     emit rerender();
 }
 
+void ShadertoyRenderer::p_onAsset_(const QString &src)
+{
+    for (Private::RenderPass& pass : p_->passes)
+    {
+        for (int i=0; i<4; ++i)
+        if (pass.src[i] == src)
+        {
+            // XXX Todo
+        }
+    }
+    emit rerender();
+}
 
 bool ShadertoyRenderer::render(const QRect& v, bool c) { return p_->render(v, c); }
 

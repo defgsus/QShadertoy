@@ -312,7 +312,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
             auto sampler = in.value("sampler").toObject();
 
-            inp.vFlip = sampler.value("vflip").toBool();
+            inp.vFlip = sampler.value("vflip").toString() == "true";
 
             const QString ftype = sampler.value("filter").toString();
 
@@ -324,7 +324,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
                 inp.filterType = ShadertoyInput::F_NEAREST;
 
             const QString wtype = sampler.value("wrap").toString();
-            if (ftype == "repeat")
+            if (wtype == "repeat")
                 inp.wrapMode = ShadertoyInput::W_REPEAT;
             else
                 inp.wrapMode = ShadertoyInput::W_CLAMP;

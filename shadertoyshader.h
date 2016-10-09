@@ -145,7 +145,8 @@ public:
     const ShadertoyShaderInfo& info() const { return p_info_; }
 
     size_t numRenderPasses() const { return p_passes_.size(); }
-    const ShadertoyRenderPass& renderPass(size_t idx) const { return p_passes_[idx]; }
+    const ShadertoyRenderPass& renderPass(size_t idx) const
+        { return p_passes_[idx]; }
 
     bool containsString(const QString&) const;
 

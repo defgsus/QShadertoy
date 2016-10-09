@@ -48,7 +48,7 @@ struct ShadertoyApi::Private
     void postRequest(const QString& url, const QVariant& userData);
     void readShaderList(QNetworkReply* reply);
     void readShader(QNetworkReply* reply);
-    void readTexture(QNetworkReply* reply);
+    void readAsset(QNetworkReply* reply);
 
     bool storeJson(const QString& filename, const QJsonObject& data);
     QImage loadImage(QByteArray);
@@ -162,8 +162,8 @@ void ShadertoyApi::p_onReply_(QNetworkReply* reply)
         p_->readShader(reply);
     else if (user == "shaderlist")
         p_->readShaderList(reply);
-    else if (user.startsWith("texture"))
-        p_->readTexture(reply);
+    else if (user.startsWith("asset"))
+        p_->readAsset(reply);
 
     reply->deleteLater();
 }
@@ -260,7 +260,7 @@ void ShadertoyApi::Private::readShader(QNetworkReply* reply)
     }
 }
 
-void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
+void ShadertoyApi::Private::readAsset(QNetworkReply* reply)
 {
     auto data = reply->readAll();
     if (data.isEmpty())
@@ -270,7 +270,7 @@ void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
     }
 
     const QString
-            src = reply->property("user").toString().mid(7),
+            src = reply->property("user").toString().mid(5),
             fn = cacheUrlAssets + src,
             path = removeFilename(fn);
     if (!QDir(".").mkpath(path))
@@ -290,11 +290,17 @@ void ShadertoyApi::Private::readTexture(QNetworkReply* reply)
     file.write(data);
     ST_DEBUG2("ShadertoyApi:: saved asset '" << fn << "'");
 
+    // it's an image?
     auto img = loadImage(data);
     if (!img.isNull())
     {
         ST_INFO("ShadertoyApi:: received texture '" << fn << "'");
         emit p->textureReceived(src, img);
+    }
+    else
+    {
+        ST_INFO("ShadertoyApi:: received asset '" << fn << "'");
+        emit p->assetReceived(src);
     }
 }
 
@@ -318,9 +324,9 @@ bool ShadertoyApi::Private::storeJson(
 }
 
 
-void ShadertoyApi::getTexture(const QString &src)
+void ShadertoyApi::getAsset(const QString &src)
 {
-    ST_DEBUG2("ShadertoyApi::getTexture(" << src << ")");
+    ST_DEBUG2("ShadertoyApi::getAsset(" << src << ")");
 
     if (QFileInfo(p_->cacheUrlAssets + src).exists())
     {
@@ -337,8 +343,8 @@ void ShadertoyApi::getTexture(const QString &src)
 
     const QString url = "https://www.shadertoy.com" + src;
 
-    ST_DEBUG("ShadertoyApi:: downloading texture '" << url << "'");
-    p_->postRequest(url, "texture" + src);
+    ST_DEBUG("ShadertoyApi:: downloading asset '" << url << "'");
+    p_->postRequest(url, "asset" + src);
 }
 
 
