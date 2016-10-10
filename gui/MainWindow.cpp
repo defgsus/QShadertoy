@@ -211,6 +211,18 @@ void MainWindow::Private::createMenu()
         auto img = r.renderToImage(QSize(256, 256));
         infoLabel->setPixmap(QPixmap::fromImage(img));
     });
+
+    a = menu->addAction(tr("create snapshots"));
+    connect(a, &QAction::triggered, [=]()
+    {
+        auto ids = shaderList->shaderIds();
+        for (auto& id : ids)
+        {
+            qDebug() << "rendering" << id;
+            QImage img = shaderList->api()->getSnapshot(id);
+            qDebug() << (img.isNull() ? "FAILED" : "ok");
+        }
+    });
 #endif
 }
 

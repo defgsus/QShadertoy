@@ -543,6 +543,8 @@ bool ShadertoyRenderer::Private::createGl()
         ST_CHECK_GL( gl->glUseProgram(0) );
     }
 
+    ST_DEBUG3("ShadertoyRenderer::createGl() shaders compiled");
+
     // assign correct index into 'passes'
     // for inputs connected to output ids
     for (RenderPass& p : passes)
@@ -699,7 +701,7 @@ bool ShadertoyRenderer::Private::render(
     bool r = true;
     for (RenderPass& p : passes)
     {
-        if (p.type == ShadertoyRenderPass::T_IMAGE)
+        if (p.type != ShadertoyRenderPass::T_IMAGE)
             r &= drawQuad(p);
         else
             r &= drawQuad(p, &fbo);

@@ -72,6 +72,8 @@ public slots:
 
     void stopRequests();
 
+    /** Get the texture asset, block until loaded.
+        @todo currently only works when already downloaded */
     QImage getTextureBlocking(const QString& src) const;
 
     // ---- offline api ----
@@ -83,6 +85,8 @@ public slots:
     /** Loads a specific shader by ID from cache */
     bool loadShader(const QString& id);
 
+    /** Get a snapshot for a specific shader */
+    QImage getSnapshot(const QString& id);
 
 private slots:
 

@@ -26,6 +26,7 @@
 #include <QApplication>
 #include <QImage>
 #include <QImageReader>
+#include <QImageWriter>
 #include <QBuffer>
 #include <QByteArray>
 #include <QRegExp>
@@ -33,6 +34,7 @@
 
 #include "ShadertoyApi.h"
 #include "ShadertoyShader.h"
+#include "ShadertoyOffscreenRenderer.h"
 #include "log.h"
 
 struct ShadertoyApi::Private
@@ -41,6 +43,7 @@ struct ShadertoyApi::Private
         : p             (p)
         , net           (nullptr)
         , numDownloads  (0)
+        , renderer      (nullptr)
         , doWebMerge    (false)
     { }
 
@@ -51,7 +54,8 @@ struct ShadertoyApi::Private
 
     bool storeJson(const QString& filename, const QJsonObject& data);
     QImage loadImage(QByteArray);
-    QImage loadImage(const QString& src);
+    QImage loadImage(const QString& fn);
+    bool saveImage(const QString& fn, const QImage& img);
     bool loadShader(const QString& id);
 
     static QString removeFilename(const QString&);
@@ -61,12 +65,16 @@ struct ShadertoyApi::Private
 
     QString
         apiUrl, appKey,
-        cacheUrlShader, cacheUrlAssets;
+        cacheUrlShader,
+        cacheUrlAssets,
+        cacheUrlSnapshot;
 
     QStringList shaderIds;
     QSet<QString> downloadShaderIds;
     int numDownloads;
     QMap<QString, ShadertoyShader> shaderMap;
+
+    ShadertoyOffscreenRenderer* renderer;
 
     bool doWebMerge;
 };
@@ -85,6 +93,7 @@ ShadertoyApi::ShadertoyApi(QObject* parent)
     //p_->appKey = Settings::instance().value(
     //                Settings::keyAppkey, "rtHtwr").toString();
     p_->cacheUrlShader = "./shader/";
+    p_->cacheUrlSnapshot = "./snapshot/";
     p_->cacheUrlAssets = "./assets"; ///< no trailing / !
 }
 
@@ -329,7 +338,7 @@ void ShadertoyApi::getAsset(const QString &src)
 
     if (QFileInfo(p_->cacheUrlAssets + src).exists())
     {
-        QImage img = p_->loadImage(src);
+        QImage img = p_->loadImage(p_->cacheUrlAssets + src);
         if (!img.isNull())
         {
             ST_INFO("ShadertoyApi:: loaded '" << src << "'");
@@ -353,7 +362,7 @@ QImage ShadertoyApi::getTextureBlocking(const QString &src) const
 
     if (QFileInfo(p_->cacheUrlAssets + src).exists())
     {
-        return p_->loadImage(src);
+        return p_->loadImage(p_->cacheUrlAssets + src);
     }
     return QImage();
 }
@@ -474,12 +483,61 @@ QImage ShadertoyApi::Private::loadImage(QByteArray d)
     return img;
 }
 
-QImage ShadertoyApi::Private::loadImage(const QString& src)
+QImage ShadertoyApi::Private::loadImage(const QString& fn)
 {
-    QImageReader read(cacheUrlAssets + src);
+    QImageReader read(fn);
     QImage img = read.read();
     if (img.isNull())
         ST_ERROR("load image failed for '" << read.fileName() << "': "
                  << read.errorString());
+    return img;
+}
+
+bool ShadertoyApi::Private::saveImage(const QString& fn, const QImage& img)
+{
+    QImageWriter write(fn);
+    if (!write.write(img))
+    {
+        ST_ERROR("save image failed for '" << write.fileName() << "': "
+                 << write.errorString());
+        return false;
+    }
+    return true;
+}
+
+QImage ShadertoyApi::getSnapshot(const QString &id)
+{
+    QString fn = p_->cacheUrlSnapshot + shaderIdToFilename(id) + ".png";
+    if (QFileInfo(fn).exists())
+    {
+        QImage img = p_->loadImage(fn);
+        if (!img.isNull())
+            return img;
+    }
+
+    auto shader = getShader(id);
+    if (!shader.isValid())
+    {
+        ST_ERROR("Can't render invalid shader '" << id << "'");
+        return QImage();
+    }
+
+    if (!p_->renderer)
+    {
+        p_->renderer = new ShadertoyOffscreenRenderer(this);
+    }
+
+    p_->renderer->setShader(shader);
+    QImage img = p_->renderer->renderToImage(QSize(256,256));
+    if (!img.isNull())
+    {
+        ST_DEBUG2("Saving image " << fn);
+        if (!QDir(".").mkpath(p_->cacheUrlSnapshot))
+        {
+            ST_ERROR("Can't create directory " << p_->cacheUrlSnapshot);
+        }
+        else
+            p_->saveImage(fn, img);
+    }
     return img;
 }
