@@ -66,6 +66,7 @@ struct ShadertoyRenderer::Private
         , cameraCapture (nullptr)
         , needsRecompile(true)
         , doUseCamera   (true)
+        , doAssetsAsync (false)
     {
         connect(api, SIGNAL(textureReceived(QString,QImage)),
                 p, SLOT(p_onTexture_(QString,QImage)),
@@ -86,7 +87,9 @@ struct ShadertoyRenderer::Private
     QOpenGLTexture* getKeyboardTexture();
     void updateCameraTexture();
     bool render(const QRect& viewPort, bool continuous);
-    bool drawQuad(RenderPass& pass);
+    bool render(FramebufferObject& fbo, bool continuous);
+    bool prepare(bool continuous);
+    bool drawQuad(RenderPass& pass, FramebufferObject* dstFbo = nullptr);
 
 
     struct RenderPass
@@ -154,7 +157,7 @@ struct ShadertoyRenderer::Private
     QCamera* camera;
     QCameraImageCapture* cameraCapture;
 
-    bool needsRecompile, doUseCamera;
+    bool needsRecompile, doUseCamera, doAssetsAsync;
 };
 
 const GLfloat ShadertoyRenderer::Private::quadVertices[] =
@@ -168,7 +171,7 @@ const GLushort ShadertoyRenderer::Private::quadIndices[] =
 
 double ShadertoyRenderer::Private::systemTime()
 {
-    // XXX This is not much high-res on MinGW or VisualStudio to my experience
+    // XXX This is not really high-res on MinGW or VisualStudio to my experience
     auto tp = std::chrono::high_resolution_clock::now();
     return std::chrono::duration_cast<std::chrono::nanoseconds>
             (tp.time_since_epoch()).count() * double(0.000000001);
@@ -215,6 +218,11 @@ void ShadertoyRenderer::setShader(const ShadertoyShader& s)
     p_->shadertoy = s;
     p_->needsRecompile = true;
 
+}
+
+void ShadertoyRenderer::setAsyncLoading(bool enable)
+{
+    p_->doAssetsAsync = enable;
 }
 
 void ShadertoyRenderer::setResolution(const QSize& s)
@@ -446,8 +454,14 @@ bool ShadertoyRenderer::Private::createGl()
                 {                    
                     if (!queried.contains(inp.source()))
                     {
-                        api->getAsset(inp.source());
-                        queried.insert(inp.source());
+                        if (doAssetsAsync)
+                        {
+                            api->getAsset(inp.source());
+                            queried.insert(inp.source());
+                        }
+                        else
+                            rp.img[inCh] =
+                                    api->getTextureBlocking(inp.source());
                     }
                 }
                 else if (inp.type() == ShadertoyInput::T_BUFFER)
@@ -645,12 +659,56 @@ void ShadertoyRenderer::p_onAsset_(const QString &src)
     emit rerender();
 }
 
-bool ShadertoyRenderer::render(const QRect& v, bool c) { return p_->render(v, c); }
+bool ShadertoyRenderer::render(const QRect& v, bool c)
+{
+    return p_->render(v, c);
+}
+
+bool ShadertoyRenderer::render(FramebufferObject& fbo, bool c)
+{
+    return p_->render(fbo, c);
+}
 
 bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
 {
     ST_DEBUG3("ShadertoyRenderer::Private::render()");
 
+    if (!prepare(continuous))
+        return false;
+
+    auto gl = context->functions();
+    ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
+                                viewPort.width(), viewPort.height()) );
+    bool r = true;
+    for (auto& p : passes)
+        r &= drawQuad(p);
+    return r;
+}
+
+bool ShadertoyRenderer::Private::render(
+        FramebufferObject& fbo, bool continuous)
+{
+    ST_DEBUG3("ShadertoyRenderer::Private::render()");
+
+    if (!prepare(continuous))
+        return false;
+
+    auto gl = context->functions();
+    ST_CHECK_GL( gl->glViewport(0, 0,
+                                fbo.size().width(), fbo.size().height()) );
+    bool r = true;
+    for (RenderPass& p : passes)
+    {
+        if (p.type == ShadertoyRenderPass::T_IMAGE)
+            r &= drawQuad(p);
+        else
+            r &= drawQuad(p, &fbo);
+    }
+    return r;
+}
+
+bool ShadertoyRenderer::Private::prepare(bool continuous)
+{
     if (!p->isReady() || needsRecompile)
     {
         destroyGl();
@@ -682,16 +740,12 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
     if (shadertoy.info().usesCamera)
         updateCameraTexture();
 
-    ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
-                                viewPort.width(), viewPort.height()) );
-    bool r = true;
-    for (auto& p : passes)
-        r &= drawQuad(p);
-    return r;
+    return true;
 }
 
 
-bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
+bool ShadertoyRenderer::Private::drawQuad(
+        RenderPass& pass, FramebufferObject* dstFbo)
 {
     ST_DEBUG3("ShadertoyRenderer::drawQuad(" << pass.name << ")");
 
@@ -817,6 +871,11 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
 
     // --- render ---
 
+    if (dstFbo)
+    {
+        dstFbo->bind();
+    }
+    else
     if (pass.type == ShadertoyRenderPass::T_BUFFER)
     {
         if (!pass.fbo)
@@ -829,8 +888,12 @@ bool ShadertoyRenderer::Private::drawQuad(RenderPass& pass)
     }
 
     ST_CHECK_GL( gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT) );
-    ST_CHECK_GL( gl->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr) );
+    ST_CHECK_GL(
+        gl->glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr) );
 
+    if (dstFbo)
+        dstFbo->unbind();
+    else
     if (pass.type == ShadertoyRenderPass::T_BUFFER && pass.fbo)
     {
         pass.fbo->swapTexture();
@@ -851,7 +914,10 @@ QOpenGLTexture* ShadertoyRenderer::Private::getImageTexture(
 
     // image not ready
     if (pass.img[idx].isNull())
+    {
+        ST_DEBUG("Image " << idx << " for pass " << pass.name << " not ready");
         return nullptr;
+    }
 
     ST_DEBUG3("pass(" << pass.name
               << "): create texture from image for slot " << idx);
@@ -865,7 +931,8 @@ QOpenGLTexture* ShadertoyRenderer::Private::getImageTexture(
                 );
     if (!t->isCreated())
     {
-        ST_ERROR("Could not create texture for image '" << pass.src[idx] << "'");
+        ST_ERROR("Could not create texture for image '"
+                 << pass.src[idx] << "'");
         delete t;
         return nullptr;
     }

@@ -12,10 +12,12 @@
 #define SHADERTOYAPI_H
 
 #include <QObject>
+#include <QImage>
 
 class QNetworkReply;
 class ShadertoyShader;
 
+/** Wrapper around the Shadertoy web-API */
 class ShadertoyApi : public QObject
 {
     Q_OBJECT
@@ -69,6 +71,8 @@ public slots:
     void getAsset(const QString& src);
 
     void stopRequests();
+
+    QImage getTextureBlocking(const QString& src) const;
 
     // ---- offline api ----
 

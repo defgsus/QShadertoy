@@ -5,7 +5,8 @@ HEADERS += \
     core/ShaderSortModel.h \
     core/ShadertoyApi.h \
     core/ShadertoyRenderer.h \
-    core/ShadertoyShader.h
+    core/ShadertoyShader.h \
+    $$PWD/core/ShadertoyOffscreenRenderer.h
 
 SOURCES += \
     core/log.cpp \
@@ -16,4 +17,5 @@ SOURCES += \
     core/ShadertoyRenderer.cpp \
     core/ShadertoyShader.cpp \
     core/ShadertoyShaderInput.cpp \
-    core/ShadertoyRenderPass.cpp
+    core/ShadertoyRenderPass.cpp \
+    $$PWD/core/ShadertoyOffscreenRenderer.cpp

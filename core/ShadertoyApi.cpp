@@ -347,7 +347,16 @@ void ShadertoyApi::getAsset(const QString &src)
 }
 
 
+QImage ShadertoyApi::getTextureBlocking(const QString &src) const
+{
+    ST_DEBUG2("ShadertoyApi::getTextureBlocking(" << src << ")");
 
+    if (QFileInfo(p_->cacheUrlAssets + src).exists())
+    {
+        return p_->loadImage(src);
+    }
+    return QImage();
+}
 
 
 

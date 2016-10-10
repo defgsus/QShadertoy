@@ -26,6 +26,7 @@
 #include "core/ShadertoyShader.h"
 #include "core/ShaderListModel.h"
 #include "core/ShaderSortModel.h"
+#include "core/ShadertoyOffscreenRenderer.h"
 #include "RenderpassView.h"
 #include "ShadertoyRenderWidget.h"
 #include "TablePlotView.h"
@@ -183,7 +184,8 @@ void MainWindow::Private::createMenu()
     auto menu = win->menuBar()->addMenu(tr("Shaders"));
 
     auto a = menu->addAction(tr("Load shaders from disk"));
-    connect(a, &QAction::triggered, [=](){ shaderList->api()->loadAllShaders(); });
+    connect(a, &QAction::triggered, [=]()
+        { shaderList->api()->loadAllShaders(); });
 
     menu->addSeparator();
 
@@ -198,6 +200,18 @@ void MainWindow::Private::createMenu()
     a = menu->addAction(tr("Stop web request"));
     connect(a, &QAction::triggered, [=](){ shaderList->api()->stopRequests(); });
 
+#ifndef NDEBUG
+    menu = win->menuBar()->addMenu(tr("Debug"));
+
+    a = menu->addAction(tr("Test offscreen render"));
+    connect(a, &QAction::triggered, [=]()
+    {
+        ShadertoyOffscreenRenderer r(win);
+        r.setShader( passView->shader() );
+        auto img = r.renderToImage(QSize(256, 256));
+        infoLabel->setPixmap(QPixmap::fromImage(img));
+    });
+#endif
 }
 
 void MainWindow::Private::setShader(const QModelIndex& fidx)

@@ -16,6 +16,7 @@
 class QOpenGLContext;
 class QSurface;
 class ShadertoyShader;
+class FramebufferObject;
 
 class ShadertoyRenderer : public QObject
 {
@@ -30,7 +31,8 @@ public:
 
     explicit ShadertoyRenderer(QObject *parent = 0);
     explicit ShadertoyRenderer(QOpenGLContext* ctx, QObject *parent = 0);
-    explicit ShadertoyRenderer(QOpenGLContext* ctx, QSurface*, QObject *parent = 0);
+    explicit ShadertoyRenderer(QOpenGLContext* ctx, QSurface*,
+                               QObject *parent = 0);
     ~ShadertoyRenderer();
 
     /** Shader is compiled? */
@@ -52,6 +54,10 @@ signals:
     void rerender();
 
 public slots:
+
+    /** Enables or disable asynchronous loading of
+        assets (like textures). */
+    void setAsyncLoading(bool enable);
 
     /** Sets the shader to render.
         The next call to render() will compile the shader */
@@ -81,6 +87,8 @@ public slots:
         If @p continuous is true, the iTimeDelta variable is updated
         with the true time delta between this and last call. */
     bool render(const QRect& viewPort, bool continuous);
+    /** Renders the shader to the given framebuffer object. */
+    bool render(FramebufferObject& fbo, bool continuous);
 
 private slots:
 
