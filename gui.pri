@@ -5,6 +5,7 @@ HEADERS += \
     gui/ShadertoyRenderWidget.h \
     gui/RenderpassView.h \
     gui/MainWindow.h \
+    $$PWD/gui/ShaderInfoView.h
 
 SOURCES += \
     gui/main.cpp \
@@ -13,4 +14,5 @@ SOURCES += \
     gui/TablePlotView.cpp \
     gui/ShadertoyRenderWidget.cpp \
     gui/RenderpassView.cpp \
-    gui/MainWindow.cpp
+    gui/MainWindow.cpp \
+    $$PWD/gui/ShaderInfoView.cpp

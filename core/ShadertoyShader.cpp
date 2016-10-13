@@ -147,8 +147,9 @@ bool ShadertoyShader::containsString(const QString& s) const
 {
     if (p_info_.description.contains(s, Qt::CaseInsensitive)
         || p_info_.name.contains(s, Qt::CaseInsensitive)
-        || p_info_.username.contains(s, Qt::CaseInsensitive))
-        return true;
+        || p_info_.username.contains(s, Qt::CaseInsensitive)
+        || p_info_.id.contains(s, Qt::CaseSensitive)
+        ) return true;
 
     for (const QString& tag : p_info_.tags)
         if (tag.contains(s, Qt::CaseInsensitive))

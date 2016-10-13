@@ -25,10 +25,11 @@ class ShaderListModel : public QAbstractTableModel
 public:
 
     /** The different columns in the table */
-    enum Columns
+    enum ColumnId
     {
         C_ID,
         C_NAME,
+        C_IMAGE,
         C_USER,
         C_DATE,
         C_VIEWS,
@@ -52,7 +53,9 @@ public:
 
     ShadertoyApi* api();
 
-public:
+    /** Display snapshots images in the table */
+    void setEnableThumbnails(bool e);
+
     // --- QAbstractTableModel interface ---
 
     int columnCount(const QModelIndex &parent) const override;

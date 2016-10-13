@@ -505,7 +505,7 @@ bool ShadertoyApi::Private::saveImage(const QString& fn, const QImage& img)
     return true;
 }
 
-QImage ShadertoyApi::getSnapshot(const QString &id)
+QImage ShadertoyApi::getSnapshot(const QString &id, bool renderIfNotCached)
 {
     QString fn = p_->cacheUrlSnapshot + shaderIdToFilename(id) + ".png";
     if (QFileInfo(fn).exists())
@@ -514,6 +514,9 @@ QImage ShadertoyApi::getSnapshot(const QString &id)
         if (!img.isNull())
             return img;
     }
+
+    if (!renderIfNotCached)
+        return QImage();
 
     auto shader = getShader(id);
     if (!shader.isValid())

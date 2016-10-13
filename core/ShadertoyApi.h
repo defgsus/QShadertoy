@@ -86,7 +86,7 @@ public slots:
     bool loadShader(const QString& id);
 
     /** Get a snapshot for a specific shader */
-    QImage getSnapshot(const QString& id);
+    QImage getSnapshot(const QString& id, bool renderIfNotCached);
 
 private slots:
 

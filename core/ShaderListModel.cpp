@@ -10,6 +10,8 @@
 
 #include <QList>
 #include <QColor>
+#include <QPixmap>
+#include <QImage>
 
 #include "ShaderListModel.h"
 #include "ShadertoyApi.h"
@@ -21,6 +23,7 @@ struct ShaderListModel::Private
     Private(ShaderListModel* p)
         : p     (p)
         , api   (new ShadertoyApi(p))
+        , doThumbnails  (false)
     {
         api->loadShaderList();
         connect(api, &ShadertoyApi::shaderListChanged, [=]()
@@ -29,30 +32,50 @@ struct ShaderListModel::Private
         });
     }
 
+    void initHeaders();
     void copyListFromApi();
+
+    struct Column
+    {
+        Column() { }
+        Column(const QString& n, ColumnId id)
+            : name(n), id(id) { }
+        QString name;
+        ColumnId id;
+    };
 
     ShaderListModel* p;
     ShadertoyApi* api;
     QList<ShadertoyShader> shaders;
-    QStringList headerNames;
+    QVector<Column> columns;
+    QMap<QString, QPixmap> pixMap;
+    bool doThumbnails;
 };
 
 ShaderListModel::ShaderListModel(QObject *parent)
     : QAbstractTableModel   (parent)
     , p_        (new Private(this))
 {
-    p_->headerNames
-            << tr("id")
-            << tr("name")
-            << tr("user")
-            << tr("date")
-            << tr("views")
-            << tr("likes")
-            << tr("passes")
-            << tr("chars")
-            << tr("use texture")
-            << tr("use music")
-            << tr("flags")
+    p_->initHeaders();
+}
+
+void ShaderListModel::Private::initHeaders()
+{
+    columns.clear();
+
+    columns << Column(tr("id"), C_ID)
+            << Column(tr("name"), C_NAME);
+    if (doThumbnails)
+        columns << Column(tr("pic"), C_IMAGE);
+    columns << Column(tr("user"), C_USER)
+            << Column(tr("date"), C_DATE)
+            << Column(tr("views"), C_VIEWS)
+            << Column(tr("likes"), C_LIKES)
+            << Column(tr("passes"), C_PASSES)
+            << Column(tr("chars"), C_NUM_CHARS)
+            << Column(tr("use texture"), C_USE_TEX)
+            << Column(tr("use music"), C_USE_MUSIC)
+            << Column(tr("flags"), C_FLAGS)
                ;
 }
 
@@ -63,7 +86,8 @@ ShaderListModel::~ShaderListModel()
 
 ShadertoyApi* ShaderListModel::api() { return p_->api; }
 
-const QStringList& ShaderListModel::shaderIds() const { return p_->api->shaderIds(); }
+const QStringList& ShaderListModel::shaderIds() const
+    { return p_->api->shaderIds(); }
 
 void ShaderListModel::Private::copyListFromApi()
 {
@@ -78,6 +102,13 @@ void ShaderListModel::Private::copyListFromApi()
     p->endResetModel();
 }
 
+void ShaderListModel::setEnableThumbnails(bool e)
+{
+    beginResetModel();
+    p_->doThumbnails = e;
+    p_->initHeaders();
+    endResetModel();
+}
 
 ShadertoyShader ShaderListModel::getShader(const QModelIndex& idx) const
 {
@@ -93,7 +124,7 @@ const ShadertoyShader& ShaderListModel::getShader(int row) const
 
 int ShaderListModel::columnCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : p_->headerNames.size();
+    return parent.isValid() ? 0 : p_->columns.size();
 }
 
 int ShaderListModel::rowCount(const QModelIndex &parent) const
@@ -106,6 +137,10 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
     if (index.row() < 0 || index.row() >= p_->shaders.size())
         return QVariant();
 
+    if (index.column() < 0 || index.column() > p_->columns.size())
+        return QVariant();
+    const Private::Column& column = p_->columns[index.column()];
+
     const ShadertoyShader shader = p_->shaders[index.row()];
 
     if (!shader.isValid())
@@ -113,14 +148,14 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
         if (role == Qt::BackgroundColorRole)
             return QColor(255,128,128);
         if (role == Qt::DisplayRole || role == Qt::EditRole)
-            if (index.column() == C_ID)
+            if (column.id == C_ID)
                 return p_->shaders[index.row()].info().id;
         return QVariant();
     }
 
     if (role == Qt::DisplayRole || role == Qt::EditRole)
     {
-        switch ((Columns)index.column())
+        switch (column.id)
         {
             case C_ID: return shader.info().id;
             case C_NAME: return shader.info().name;
@@ -133,6 +168,25 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
             case C_USE_TEX: return shader.info().usesTextures;
             case C_USE_MUSIC: return shader.info().usesMusic;
             case C_FLAGS: return shader.info().flags;
+            case C_IMAGE: return QVariant();
+        }
+    }
+
+    if (role == Qt::DecorationRole)
+    {
+        if (column.id == C_IMAGE)
+        {
+            auto i = p_->pixMap.find(shader.info().id);
+            if (i != p_->pixMap.end())
+                return i.value();
+            auto img = p_->api->getSnapshot(shader.info().id, false);
+            if (img.isNull())
+                return QVariant();
+            auto p = QPixmap::fromImage(
+                        img.scaled(48, 48, Qt::IgnoreAspectRatio,
+                                           Qt::SmoothTransformation) );
+            p_->pixMap.insert(shader.info().id, p);
+            return p;
         }
     }
 
@@ -143,9 +197,9 @@ QVariant ShaderListModel::headerData(
         int section, Qt::Orientation orientation, int role) const
 {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole
-            && section >= 0 && section < p_->headerNames.size())
+            && section >= 0 && section < p_->columns.size())
     {
-        return p_->headerNames[section];
+        return p_->columns[section].name;
     }
 
     return QAbstractTableModel::headerData(section, orientation, role);

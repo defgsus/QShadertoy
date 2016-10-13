@@ -20,6 +20,8 @@
 #include <QMenu>
 #include <QAction>
 #include <QProgressBar>
+#include <QDockWidget>
+#include <QStatusBar>
 
 #include "MainWindow.h"
 #include "core/ShadertoyApi.h"
@@ -29,6 +31,7 @@
 #include "core/ShadertoyOffscreenRenderer.h"
 #include "RenderpassView.h"
 #include "ShadertoyRenderWidget.h"
+#include "ShaderInfoView.h"
 #include "TablePlotView.h"
 #include "Settings.h"
 #include "LogView.h"
@@ -41,6 +44,8 @@ struct MainWindow::Private
 
     void createWidgets();
     void createMenu();
+    void createDockWidget(const QString& title, QWidget* w);
+
     void loadShaders();
 
     void setShader(const QModelIndex&);
@@ -60,8 +65,10 @@ struct MainWindow::Private
     QTableView* shaderTable;
     RenderPassView* passView;
     TablePlotView* plotView;
-    QLabel * infoLabel;
+    ShaderInfoView * infoView;
     QProgressBar* progressBar;
+
+    QMenu* viewMenu;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -70,23 +77,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setObjectName("MainWindow");
     setMinimumSize(640, 480);
+
+    p_->createMenu();
+    p_->createWidgets();
+
     Settings::instance().restoreGeometry(this);
 
-    p_->createWidgets();
-    p_->createMenu();
-
-    //p_->api->getShaderList();
-    //p_->downloadAllShaders();
-    //p_->loadShaders();
-
     p_->setShader(ShadertoyShader());
-
-    /*
-    connect(p_->api, SIGNAL(shaderListReceived()),
-            this, SLOT(p_onShaderList_()), Qt::QueuedConnection);
-    connect(p_->api, SIGNAL(shaderReceived(QString)),
-            this, SLOT(p_onShader_(QString)), Qt::QueuedConnection);
-    */
 }
 
 MainWindow::~MainWindow()
@@ -101,86 +98,102 @@ void MainWindow::showEvent(QShowEvent* )
     p_->shaderList->api()->loadAllShaders();
 }
 
+void MainWindow::Private::createDockWidget(
+        const QString &title, QWidget *w)
+{
+    auto dock = new QDockWidget(title, win);
+    dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    dock->setWidget(w);
+    dock->setObjectName(w->objectName());
+    win->addDockWidget(Qt::AllDockWidgetAreas, dock);
+    viewMenu->addAction(dock->toggleViewAction());
+}
+
 void MainWindow::Private::createWidgets()
 {
-    win->setCentralWidget(new QWidget(win));
-    auto lv = new QVBoxLayout(win->centralWidget());
+    // render widget
+    auto w = new QWidget(win);
+    auto lv = new QVBoxLayout(w);
 
-        auto lh = new QHBoxLayout();
-        lv->addLayout(lh);
+        renderWidget = new ShadertoyRenderWidget(w);
+        lv->addWidget(renderWidget, 2);
 
-            auto lv1 = new QVBoxLayout();
-            lh->addLayout(lv1);
+        // playbar
+        auto tb = renderWidget->createPlaybar(w);
+        lv->addWidget(tb);
 
-                // render widget
-                renderWidget = new ShadertoyRenderWidget(win);
-                lv1->addWidget(renderWidget);
+    w->setObjectName("RenderWidget");
+    createDockWidget(tr("render view"), w);
 
-                // playbar
-                lv1->addWidget(renderWidget->createPlaybar(win));
+    // shader list
+    w = new QWidget(win);
+    lv = new QVBoxLayout(w);
 
-                // shader list
-                tableFilterEdit = new QLineEdit(win);
-                lv1->addWidget(tableFilterEdit);
-                connect(tableFilterEdit, &QLineEdit::textChanged, [=]()
-                {
-                    shaderSortModel->setFulltextFilter(
-                                tableFilterEdit->text());
-                });
+        tableFilterEdit = new QLineEdit(win);
+        lv->addWidget(tableFilterEdit);
+        connect(tableFilterEdit, &QLineEdit::textChanged, [=]()
+        {
+            shaderSortModel->setFulltextFilter(
+                        tableFilterEdit->text());
+        });
 
-                shaderTable = new QTableView(win);
-                shaderTable->setSortingEnabled(true);
-                lv1->addWidget(shaderTable);
-                shaderSortModel = new ShaderSortModel(shaderTable);
-                shaderSortModel->setFilterRole(Qt::DisplayRole);
+        shaderTable = new QTableView(win);
+        lv->addWidget(shaderTable, 2);
+        shaderTable->setSortingEnabled(true);
+        shaderSortModel = new ShaderSortModel(shaderTable);
+        shaderSortModel->setFilterRole(Qt::DisplayRole);
 
-                shaderList = new ShaderListModel(shaderTable);
-                shaderSortModel->setSourceModel(shaderList);
-                shaderTable->setModel(shaderSortModel);
+        shaderList = new ShaderListModel(shaderTable);
+        shaderSortModel->setSourceModel(shaderList);
+        shaderTable->setModel(shaderSortModel);
 
-                connect(shaderTable, &QTableView::activated,
-                        [=](const QModelIndex& idx){ setShader(idx); });
+        connect(shaderTable, &QTableView::activated,
+                [=](const QModelIndex& idx){ setShader(idx); });
 
-            lv1 = new QVBoxLayout();
-            lh->addLayout(lv1, 3);
+    w->setObjectName("ShaderList");
+    createDockWidget(tr("shader list"), w);
 
-                auto tab = new QTabWidget(win);
-                tab->setSizePolicy(
-                            QSizePolicy::Expanding, QSizePolicy::Expanding);
-                lv1->addWidget(tab);
+    // source / inputs
+    passView = new RenderPassView(win);
+    connect(passView, &RenderPassView::shaderChanged,
+            [=](){ onShaderEdited(); });
+    passView->setObjectName("PassView");
+    createDockWidget(tr("source"), passView);
 
-                    passView = new RenderPassView(win);
-                    connect(passView, &RenderPassView::shaderChanged,
-                            [=](){ onShaderEdited(); });
-                    tab->addTab(passView, "source");
-
-                    plotView = new TablePlotView(win);
-                    plotView->setModel(shaderList);
-                    tab->addTab(plotView, "plot");
+    // comparison plot
+    plotView = new TablePlotView(win);
+    plotView->setModel(shaderList);
+    plotView->setObjectName("PlotView");
+    createDockWidget(tr("shader compare plot"), plotView);
 
 #if 0
-                auto logView = new LogView(win);
-                lv1->addWidget(logView);
+    auto logView = new LogView(win);
+    lv1->addWidget(logView);
 #endif
 
-        infoLabel = new QLabel();
-        lv->addWidget(infoLabel);
+    // info view
+    infoView = new ShaderInfoView(win);
+    infoView->setObjectName("InfoView");
+    createDockWidget(tr("shader info"), infoView);
 
-        progressBar = new QProgressBar(win);
+    // progress bar
+    progressBar = new QProgressBar(win);
+    progressBar->setVisible(false);
+    win->statusBar()->addPermanentWidget(progressBar);
+    connect(shaderList->api(), &ShadertoyApi::downloadProgress, [=](int p)
+    {
+        progressBar->setValue(p);
+    });
+    connect(shaderList->api(), &ShadertoyApi::mergeFinished, [=]()
+    {
         progressBar->setVisible(false);
-        lv->addWidget(progressBar);
-        connect(shaderList->api(), &ShadertoyApi::downloadProgress, [=](int p)
-        {
-            progressBar->setValue(p);
-        });
-        connect(shaderList->api(), &ShadertoyApi::mergeFinished, [=]()
-        {
-            progressBar->setVisible(false);
-        });
+    });
 }
 
 void MainWindow::Private::createMenu()
 {
+    // ########### SHADERS ############
+
     auto menu = win->menuBar()->addMenu(tr("Shaders"));
 
     auto a = menu->addAction(tr("Load shaders from disk"));
@@ -200,6 +213,18 @@ void MainWindow::Private::createMenu()
     a = menu->addAction(tr("Stop web request"));
     connect(a, &QAction::triggered, [=](){ shaderList->api()->stopRequests(); });
 
+
+    // ########## Options ############
+    menu = win->menuBar()->addMenu(tr("Options"));
+
+    a = menu->addAction(tr("Display thumbnails"));
+    a->setCheckable(true);
+    connect(a, &QAction::triggered, [=](bool e)
+    {
+        shaderList->setEnableThumbnails(e);
+    });
+
+    // ############ DEBUG ##############
 #ifndef NDEBUG
     menu = win->menuBar()->addMenu(tr("Debug"));
 
@@ -209,7 +234,7 @@ void MainWindow::Private::createMenu()
         ShadertoyOffscreenRenderer r(win);
         r.setShader( passView->shader() );
         auto img = r.renderToImage(QSize(256, 256));
-        infoLabel->setPixmap(QPixmap::fromImage(img));
+        //someLabel->setPixmap(QPixmap::fromImage(img));
     });
 
     a = menu->addAction(tr("create snapshots"));
@@ -219,11 +244,15 @@ void MainWindow::Private::createMenu()
         for (auto& id : ids)
         {
             qDebug() << "rendering" << id;
-            QImage img = shaderList->api()->getSnapshot(id);
+            QImage img = shaderList->api()->getSnapshot(id, true);
             qDebug() << (img.isNull() ? "FAILED" : "ok");
         }
     });
 #endif
+
+    // ########## VIEW ############
+    viewMenu = win->menuBar()->addMenu(tr("View"));
+
 }
 
 void MainWindow::Private::setShader(const QModelIndex& fidx)
@@ -237,17 +266,7 @@ void MainWindow::Private::setShader(const ShadertoyShader& s)
     QString text;
     QTextStream str(&text);
 
-    str << "name: " << s.info().name
-        /*<< "id: " << s.info().id
-        << "\nuser: " << s.info().username
-        << "\nviews: " << s.info().views
-        << "\nlikes: " << s.info().likes
-        << "\nflags: " << s.info().flags
-           */
-        << " desc: " << s.info().description
-    ;
-    infoLabel->setText(text);
-
+    infoView->setShader(s);
     passView->setShader(s);
     renderWidget->setShader(s);
     renderWidget->update();
