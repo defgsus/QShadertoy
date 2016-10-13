@@ -5,7 +5,8 @@ HEADERS += \
     gui/ShadertoyRenderWidget.h \
     gui/RenderpassView.h \
     gui/MainWindow.h \
-    $$PWD/gui/ShaderInfoView.h
+    $$PWD/gui/ShaderInfoView.h \
+    $$PWD/gui/AudioPlayer.h
 
 SOURCES += \
     gui/main.cpp \
@@ -15,4 +16,5 @@ SOURCES += \
     gui/ShadertoyRenderWidget.cpp \
     gui/RenderpassView.cpp \
     gui/MainWindow.cpp \
-    $$PWD/gui/ShaderInfoView.cpp
+    $$PWD/gui/ShaderInfoView.cpp \
+    $$PWD/gui/AudioPlayer.cpp

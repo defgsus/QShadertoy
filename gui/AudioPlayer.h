@@ -18,34 +18,37 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 ****************************************************************************/
 
-#ifndef SHADERTOYOFFSCREENRENDERER_H
-#define SHADERTOYOFFSCREENRENDERER_H
+#ifndef AUDIOPLAYER_H
+#define AUDIOPLAYER_H
 
 #include <QObject>
-#include <QImage>
 
-class ShadertoyShader;
+class QIODevice;
 
-class ShadertoyOffscreenRenderer : public QObject
+/** Basic interface to Qt's QAudioOutput.
+    Expects float* data */
+class AudioPlayer : public QObject
 {
     Q_OBJECT
 public:
-    explicit ShadertoyOffscreenRenderer(QObject *parent = 0);
-    ~ShadertoyOffscreenRenderer();
+    explicit AudioPlayer(QObject *parent = 0);
+    ~AudioPlayer();
 
 signals:
 
 public slots:
 
-    void setShader(const ShadertoyShader& s);
+    bool play(const float* samples, size_t numSamples,
+              size_t numChannels, size_t sampleRate);
 
-    QImage renderToImage(const QSize& resolution);
+    bool play(QIODevice* data, size_t numChannels, size_t sampleRate);
 
-    bool renderSound(const QSize& res, std::vector<float>& buffer);
+    /** Stops all samples */
+    void stop();
 
 private:
     struct Private;
     Private* p_;
 };
 
-#endif // SHADERTOYOFFSCREENRENDERER_H
+#endif // AUDIOPLAYER_H

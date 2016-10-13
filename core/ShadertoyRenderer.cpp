@@ -88,6 +88,7 @@ struct ShadertoyRenderer::Private
     void updateCameraTexture();
     bool render(const QRect& viewPort, bool continuous);
     bool render(FramebufferObject& fbo, bool continuous);
+    bool renderSound(FramebufferObject& fbo);
     bool prepare(bool continuous);
     bool drawQuad(RenderPass& pass, FramebufferObject* dstFbo = nullptr);
 
@@ -210,6 +211,10 @@ bool ShadertoyRenderer::isReady() const
 
 const QString& ShadertoyRenderer::errorString() const { return p_->errorStr; }
 double ShadertoyRenderer::messuredFps() const { return p_->messuredFps; }
+const QSize& ShadertoyRenderer::resolution() const
+{
+    return p_->resolution;
+}
 
 void ShadertoyRenderer::setShader(const ShadertoyShader& s)
 {
@@ -343,6 +348,7 @@ bool ShadertoyRenderer::Private::createGl()
 "    gl_Position = mvp_matrix * a_position;\n"
 "}\n"
             , fragSrc1 =
+"#extension GL_OES_standard_derivatives : enable\n"
 "#ifdef GL_ES\n"
 "precision highp int;\n"
 "precision highp float;\n"
@@ -361,27 +367,34 @@ bool ShadertoyRenderer::Private::createGl()
 "void main()\n"
 "{\n"
 "    mainImage(gl_FragColor, gl_FragCoord.xy);\n"
-//"    gl_FragColor = vec4(gl_FragCoord.xy / iResolution.xy, 0,1);\n"
+"}\n"
+            , fragSrcSound =
+"void main()\n"
+"{\n"
+"   vec2 _pix_ = floor(gl_FragCoord.xy);\n"
+"   float _pos_ = _pix_.x + iResolution.x * _pix_.y;\n"
+"   vec2 _sam_ = mainSound(_pos_ / iSampleRate);\n"
+"   gl_FragColor = vec4(_sam_.x,_sam_.y, 0.,1.);\n"
 "}\n"
             , fragSrcFisheye =
 "void main()\n"
 "{\n"
-"    vec2 uv = (gl_FragCoord.xy - .5*iResolution.xy) / iResolution.y * 2.;\n"
-"    vec3 ro = vec3(0.);\n"
-"    vec3 rd = normalize(vec3(uv, -2. + length(uv)));\n"
-"    mainVR(gl_FragColor, gl_FragCoord.xy, ro, rd);\n"
+"    vec2 _uv_ = (gl_FragCoord.xy - .5*iResolution.xy) / iResolution.y * 2.;\n"
+"    vec3 _ro_ = vec3(0.);\n"
+"    vec3 _rd_ = normalize(vec3(_uv_, -2. + length(_uv_)));\n"
+"    mainVR(gl_FragColor, gl_FragCoord.xy, _ro_, _rd_);\n"
 "}\n"
             , fragSrcCrossEye =
 "void main()\n"
 "{\n"
 "    vec2 _res_ = iResolution.xy * vec2(.5, 1.);\n"
 "    float _side_ = gl_FragCoord.x < _res_.x ? -1. : 1.;\n"
-"    vec2 uv = (vec2(mod(gl_FragCoord.x, _res_.x), gl_FragCoord.y) - .5*_res_.xy) / _res_.y * 2.;\n"
+"    vec2 _uv_ = (vec2(mod(gl_FragCoord.x, _res_.x), gl_FragCoord.y) - .5*_res_.xy) / _res_.y * 2.;\n"
 "\n"
-"    vec3 ro = vec3(-_side_*_ST_eyeMod_.x, 0., 0.);\n"
-"    vec3 rd = normalize(vec3(uv,-1.));\n"
+"    vec3 _ro_ = vec3(-_side_*_ST_eyeMod_.x, 0., 0.);\n"
+"    vec3 _rd_ = normalize(vec3(_uv_,-1.));\n"
 "\n"
-"    mainVR(gl_FragColor, gl_FragCoord, ro, rd);\n"
+"    mainVR(gl_FragColor, gl_FragCoord, _ro_, _rd_);\n"
 "}\n"
     ;
 
@@ -413,10 +426,6 @@ bool ShadertoyRenderer::Private::createGl()
 
     for (const ShadertoyRenderPass& pass : stpasses)
     {
-        // XXX todo
-        if (pass.type() == ShadertoyRenderPass::T_SOUND)
-            continue;
-
         // -- create per-pass texture input uniform code --
 
         QString fragSrc1b;
@@ -516,13 +525,20 @@ bool ShadertoyRenderer::Private::createGl()
 
         auto frag = new QOpenGLShader(QOpenGLShader::Fragment, rp.shader);
         QString src =
-            fragSrc1 + fragSrc1b + pass.fragmentSource();
-        if (projectionMode == P_RECT)
-            src += fragSrc2;
-        else if (projectionMode == P_CROSS_EYE)
-            src += fragSrcCrossEye;
+            fragSrc1 + fragSrc1b + pass.fragmentSource() + "\n";
+        if (pass.type() == ShadertoyRenderPass::T_SOUND)
+        {
+            src += fragSrcSound;
+        }
         else
-            src += fragSrcFisheye;
+        {
+            if (projectionMode == P_RECT)
+                src += fragSrc2;
+            else if (projectionMode == P_CROSS_EYE)
+                src += fragSrcCrossEye;
+            else
+                src += fragSrcFisheye;
+        }
         if (!frag->compileSourceCode(src))
         {
             ST_RENDER_ERROR(tr("compile failed (pass: %1):\n%2")
@@ -700,6 +716,31 @@ bool ShadertoyRenderer::render(FramebufferObject& fbo, bool c)
     return p_->render(fbo, c);
 }
 
+bool ShadertoyRenderer::renderSound(FramebufferObject& fbo)
+{
+    return p_->renderSound(fbo);
+}
+
+bool ShadertoyRenderer::renderSound(std::vector<float>& buffer)
+{
+    if (!p_->prepare(false))
+        return false;
+    FramebufferObject fbo(p_->context);
+    if (!fbo.create(resolution()))
+        return false;
+    bool res = p_->renderSound(fbo);
+    if (res)
+    {
+        auto gl = p_->context->functions();
+        ST_CHECK_GL( glBindTexture(GL_TEXTURE_2D, fbo.texture() ) );
+        buffer.resize(fbo.size().width() * fbo.size().height() * 2);
+        ST_CHECK_GL( glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_FLOAT,
+                                   buffer.data()) );
+    }
+    fbo.release();
+    return res;
+}
+
 bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
 {
     ST_DEBUG3("ShadertoyRenderer::Private::render()");
@@ -711,8 +752,10 @@ bool ShadertoyRenderer::Private::render(const QRect& viewPort, bool continuous)
     ST_CHECK_GL( gl->glViewport(viewPort.x(), viewPort.y(),
                                 viewPort.width(), viewPort.height()) );
     bool r = true;
-    for (auto& p : passes)
-        r &= drawQuad(p);
+    for (Private::RenderPass& p : passes)
+        if (p.type == ShadertoyRenderPass::T_BUFFER
+         || p.type == ShadertoyRenderPass::T_IMAGE)
+            r &= drawQuad(p);
     return r;
 }
 
@@ -730,10 +773,30 @@ bool ShadertoyRenderer::Private::render(
     bool r = true;
     for (RenderPass& p : passes)
     {
-        if (p.type != ShadertoyRenderPass::T_IMAGE)
+        if (p.type == ShadertoyRenderPass::T_BUFFER)
             r &= drawQuad(p);
-        else
+        else if (p.type == ShadertoyRenderPass::T_IMAGE)
             r &= drawQuad(p, &fbo);
+    }
+    return r;
+}
+
+bool ShadertoyRenderer::Private::renderSound(
+        FramebufferObject& fbo)
+{
+    ST_DEBUG3("ShadertoyRenderer::Private::renderSound()");
+
+    if (!prepare(false))
+        return false;
+
+    auto gl = context->functions();
+    ST_CHECK_GL( gl->glViewport(0, 0,
+                                fbo.size().width(), fbo.size().height()) );
+    bool r = false;
+    for (RenderPass& p : passes)
+    {
+        if (p.type == ShadertoyRenderPass::T_SOUND)
+            r = drawQuad(p, &fbo);
     }
     return r;
 }
@@ -799,6 +862,7 @@ bool ShadertoyRenderer::Private::drawQuad(
         channelRes[i*3+1] = 0.f;
         channelRes[i*3+2] = 1.f;
 
+        // get input textures
         switch (pass.inputType[i])
         {
             case ShadertoyInput::T_NONE: break;
@@ -828,15 +892,18 @@ bool ShadertoyRenderer::Private::drawQuad(
                         {
                             /// @todo Need to set mag-filter setting
                             ST_DEBUG3("pass(" << pass.name
-                                      << ") bind (" << opass->name << ").fbo[id="
+                                      << ") bind (" << opass->name
+                                      << ").fbo[id="
                                       << pass.inputId[i] << ", tex=" << texName
                                       << "] to slot " << i);
-                            ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D, texName) );
+                            ST_CHECK_GL( gl->glBindTexture(GL_TEXTURE_2D,
+                                                           texName) );
                             channelRes[i*3+0] = opass->fbo->size().width();
                             channelRes[i*3+1] = opass->fbo->size().height();
-                            channelRes[i*3+2] = opass->fbo->size().height() > 0 ?
-                                                GLfloat(opass->fbo->size().width())
-                                                    / opass->fbo->size().height() : 0.f;
+                            channelRes[i*3+2] = opass->fbo->size().height() > 0
+                                    ? GLfloat(opass->fbo->size().width())
+                                      / opass->fbo->size().height()
+                                    : 0.f;
                         }
                     }
                     continue;
@@ -850,7 +917,8 @@ bool ShadertoyRenderer::Private::drawQuad(
         channelRes[i*3+0] = pass.tex[i]->width();
         channelRes[i*3+1] = pass.tex[i]->height();
         channelRes[i*3+2] = pass.tex[i]->height() > 0 ?
-                            GLfloat(pass.tex[i]->width()) / pass.tex[i]->height() : 0.f;
+                            GLfloat(pass.tex[i]->width())
+                            / pass.tex[i]->height() : 0.f;
 
         ST_DEBUG3("pass(" << pass.name << "): bind texture "
                   << pass.tex[i] << " to slot " << i);
@@ -894,6 +962,7 @@ bool ShadertoyRenderer::Private::drawQuad(
     pass.shader->setUniformValue(pass.iEyeMod, eyeDistance, eyeRotation);
     pass.shader->setUniformValueArray(
                 pass.iChannelResolution, channelRes, 4, 3);
+    pass.shader->setUniformValue(pass.iSampleRate, 44100.f);
 
     // -- bind vertex array --
 
@@ -902,11 +971,13 @@ bool ShadertoyRenderer::Private::drawQuad(
 
     // --- render ---
 
+    // use given framebuffer
     if (dstFbo)
     {
         dstFbo->bind();
     }
     else
+    // use internal framebuffer for "Buf X" stages
     if (pass.type == ShadertoyRenderPass::T_BUFFER)
     {
         if (!pass.fbo)

@@ -53,6 +53,7 @@ struct ShadertoyOffscreenRenderer::Private
     bool init(const QSize& res);
     bool makeCurrent();
     bool render(const QSize& res);
+    bool renderSound(const QSize& res, std::vector<float>& buffer);
     QImage downloadQImage();
 
     ShadertoyOffscreenRenderer* p;
@@ -88,6 +89,12 @@ QImage ShadertoyOffscreenRenderer::renderToImage(const QSize& s)
         return QImage();
 
     return p_->downloadQImage();
+}
+
+bool ShadertoyOffscreenRenderer::renderSound(
+        const QSize& res, std::vector<float>& buffer)
+{
+    return p_->renderSound(res, buffer);
 }
 
 bool ShadertoyOffscreenRenderer::Private::init(const QSize& res)
@@ -141,6 +148,9 @@ bool ShadertoyOffscreenRenderer::Private::init(const QSize& res)
         renderer->setAsyncLoading(false);
     }
 
+    if (renderer->resolution() != res)
+        renderer->setResolution(res);
+
     return true;
 }
 
@@ -174,6 +184,24 @@ bool ShadertoyOffscreenRenderer::Private::render(const QSize& res)
         return false;
 
     return renderer->render(*fbo, false);
+}
+
+bool ShadertoyOffscreenRenderer::Private::renderSound(
+        const QSize& res, std::vector<float>& buf)
+{
+    if (!init(res))
+        return false;
+
+    if (shaderChanged)
+    {
+        renderer->setShader(shader);
+        shaderChanged = false;
+    }
+
+    if (!makeCurrent())
+        return false;
+
+    return renderer->renderSound(buf);
 }
 
 QImage ShadertoyOffscreenRenderer::Private::downloadQImage()

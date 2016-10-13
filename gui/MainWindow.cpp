@@ -22,6 +22,7 @@
 #include <QProgressBar>
 #include <QDockWidget>
 #include <QStatusBar>
+#include <QMessageBox>
 
 #include "MainWindow.h"
 #include "core/ShadertoyApi.h"
@@ -35,11 +36,13 @@
 #include "TablePlotView.h"
 #include "Settings.h"
 #include "LogView.h"
+#include "AudioPlayer.h"
 
 struct MainWindow::Private
 {
     Private(MainWindow* p)
-        : win       (p)
+        : win           (p)
+        , audioPlayer   (new AudioPlayer(p))
     { }
 
     void createWidgets();
@@ -57,6 +60,7 @@ struct MainWindow::Private
 
     ShaderListModel* shaderList;
     ShaderSortModel* shaderSortModel;
+    AudioPlayer* audioPlayer;
 
     int curDownShader;
 
@@ -240,6 +244,24 @@ void MainWindow::Private::createMenu()
         r.setShader( passView->shader() );
         auto img = r.renderToImage(QSize(256, 256));
         //someLabel->setPixmap(QPixmap::fromImage(img));
+    });
+
+    a = menu->addAction(tr("Test offscreen sound render"));
+    connect(a, &QAction::triggered, [=]()
+    {
+        ShadertoyOffscreenRenderer r(win);
+        r.setShader( passView->shader() );
+        std::vector<float> buffer;
+        if (r.renderSound(QSize(1024,1024), buffer))
+        {
+            if (!audioPlayer->play(buffer.data(),
+                    buffer.size()/2, 2, 44100))
+                QMessageBox::critical(win, tr("audio"),
+                                      tr("failed to play audio"));
+        }
+        else
+            QMessageBox::critical(win, tr("audio"),
+                                  tr("failed to render audio"));
     });
 
     a = menu->addAction(tr("create snapshots"));

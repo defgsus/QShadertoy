@@ -53,6 +53,8 @@ public:
     /** Messured frames per second that are archived */
     double messuredFps() const;
 
+    const QSize& resolution() const;
+
 signals:
 
     /** Emitted when a texture is loaded */
@@ -97,6 +99,11 @@ public slots:
     bool render(const QRect& viewPort, bool continuous);
     /** Renders the shader to the given framebuffer object. */
     bool render(FramebufferObject& fbo, bool continuous);
+
+    /** Render the Sound shader into the given framebuffer */
+    bool renderSound(FramebufferObject& fbo);
+    /** Render the Sound shader into the float buffer. */
+    bool renderSound(std::vector<float>& buffer);
 
 private slots:
 
