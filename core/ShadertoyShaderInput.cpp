@@ -43,6 +43,7 @@ bool ShadertoyInput::hasFilterSetting() const
         || t == T_VIDEO
         || t == T_CUBEMAP
         || t == T_BUFFER
+        || t == T_KEYBOARD
             ;
 }
 
@@ -50,6 +51,7 @@ bool ShadertoyInput::hasWrapSetting() const
 {
     auto t = type();
     return t == T_TEXTURE
+        || t == T_KEYBOARD
         || t == T_VIDEO
             ;
 }

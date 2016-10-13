@@ -74,6 +74,8 @@ void ShaderListModel::Private::initHeaders()
             << Column(tr("passes"), C_PASSES)
             << Column(tr("chars"), C_NUM_CHARS)
             << Column(tr("use texture"), C_USE_TEX)
+            << Column(tr("use keyboard"), C_USE_KEYBOARD)
+            << Column(tr("use mouse"), C_USE_MOUSE)
             << Column(tr("use music"), C_USE_MUSIC)
             << Column(tr("flags"), C_FLAGS)
                ;
@@ -167,6 +169,8 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
             case C_NUM_CHARS: return (int)shader.info().numChars;
             case C_USE_TEX: return shader.info().usesTextures;
             case C_USE_MUSIC: return shader.info().usesMusic;
+            case C_USE_KEYBOARD: return shader.info().usesKeyboard;
+            case C_USE_MOUSE: return shader.info().usesMouse;
             case C_FLAGS: return shader.info().flags;
             case C_IMAGE: return QVariant();
         }

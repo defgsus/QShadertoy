@@ -18,6 +18,11 @@ class QSurface;
 class ShadertoyShader;
 class FramebufferObject;
 
+/** A self-contained class to render ShadertoyShader instances.
+
+    Although this is the main functionality of this program
+    it's quite a hack, internally.
+*/
 class ShadertoyRenderer : public QObject
 {
     Q_OBJECT
@@ -56,7 +61,9 @@ signals:
 public slots:
 
     /** Enables or disable asynchronous loading of
-        assets (like textures). */
+        assets (like textures).
+        In async-mode, once the assets are ready,
+        the shader is automatically restarted. */
     void setAsyncLoading(bool enable);
 
     /** Sets the shader to render.
@@ -67,6 +74,7 @@ public slots:
         it's buffers. If the resolution changes, the next call
         to render() will recompile everything. */
     void setResolution(const QSize& );
+
     /** Sets the projection mode using the VR hook */
     void setProjectionMode(Projection p);
 

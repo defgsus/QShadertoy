@@ -38,6 +38,8 @@ public:
         C_NUM_CHARS,
         C_USE_TEX,
         C_USE_MUSIC,
+        C_USE_KEYBOARD,
+        C_USE_MOUSE,
         C_FLAGS
     };
 

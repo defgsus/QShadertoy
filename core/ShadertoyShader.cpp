@@ -95,6 +95,9 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
         p_info_.numChars += pass.fragmentSource().size();
 
+        if (pass.fragmentSource().contains("iMouse"))
+            p_info_.usesMouse = true;
+
         for (size_t i = 0; i < pass.numInputs(); ++i)
         {
             switch (pass.input(i).type())

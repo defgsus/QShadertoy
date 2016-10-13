@@ -151,7 +151,8 @@ struct ShadertoyShaderInfo
          usesVideo,
          usesCamera,
          usesMicrophone,
-         usesKeyboard;
+         usesKeyboard,
+         usesMouse;
 
     /** Returns the shadertoy.com url */
     QString getUrl() const;

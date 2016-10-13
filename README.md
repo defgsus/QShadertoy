@@ -31,6 +31,7 @@ Of these, 8 shaders either segfault somewhere in QOpenGLShaderProgram::link(), o
     * 2d textures + mipmap (no cube-maps yet)
     * multi-pass rendering (probably still a few bugs there with some shaders)
     * mouse input
+    * keyboard input
     * support of mainVR() function for fisheye and cross-eye-view images
 
 Missing is the whole audio/camera/video input..
@@ -44,5 +45,8 @@ This is more or less a test-bed to enable any kind of shadertoy program to be ex
     * perform live
     * exploit mainVR() function in any kind of way ;)
     * manage programs, collections and help searching for particular effects
-    * add certain features to programs and save to 'library', e.g. the mainVR() function, audio-reactiveness, osc input, ...
+    * add certain features to programs and save to 'library', like
+        * the mainVR() function
+        * audio-reactiveness
+        * osc input, ...
     * maybe create a public repo where people can fork and add features

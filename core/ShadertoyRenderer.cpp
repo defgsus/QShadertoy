@@ -241,15 +241,44 @@ void ShadertoyRenderer::setMouse(const QPoint &pos, bool leftKey, bool rightKey)
 
 void ShadertoyRenderer::setKeyboard(Qt::Key qkey, bool pressed)
 {
-    int key = qkey;
-
+    // this table thanks to fb39ca4, https://www.shadertoy.com/view/4tt3Wn
+    int key;
+    switch (qkey)
+    {
+        default:                key = qkey; break;
+        case Qt::Key_PageUp:    key = 33; break;
+        case Qt::Key_PageDown:  key = 34; break;
+        case Qt::Key_End:       key = 35; break;
+        case Qt::Key_Home:      key = 36; break;
+        case Qt::Key_Left:      key = 37; break;
+        case Qt::Key_Up:        key = 38; break;
+        case Qt::Key_Right:     key = 39; break;
+        case Qt::Key_Down:      key = 40; break;
+        case Qt::Key_Delete:    key = 46; break;
+        case Qt::Key_Insert:    key = 54; break;
+        case Qt::Key_F1:        key = 112; break;
+        case Qt::Key_F2:        key = 113; break;
+        case Qt::Key_F3:        key = 114; break;
+        case Qt::Key_F4:        key = 115; break;
+        case Qt::Key_F5:        key = 116; break;
+        case Qt::Key_F6:        key = 117; break;
+        case Qt::Key_F7:        key = 118; break;
+        case Qt::Key_F8:        key = 119; break;
+        case Qt::Key_F9:        key = 120; break;
+        case Qt::Key_F10:       key = 121; break;
+        case Qt::Key_F11:       key = 122; break;
+        case Qt::Key_F12:       key = 123; break;
+    }
 
     if (key < 0 || key > 255)
         return;
 
-    p_->keyState[key] =
-    p_->keyState[key+256] = pressed ? 255 : 0;
-    p_->keyState[key+512] = 255 - p_->keyState[key+512];
+    p_->keyState[key] = pressed ? 255 : 0;
+    if (pressed)
+    {
+        p_->keyState[key+256] = 255;
+        p_->keyState[key+512] = 255 - p_->keyState[key+512];
+    }
     p_->isKeyStateChanged = true;
 }
 
@@ -965,6 +994,11 @@ QOpenGLTexture* ShadertoyRenderer::Private::getKeyboardTexture()
         isKeyStateChanged = false;
         keyTexture->setData(QOpenGLTexture::Luminance,
                             QOpenGLTexture::UInt8, &keyState[0]);
+        // 2nd row contains single key-press
+        // which is deleted before the next frame
+        for (int i=256; i<512; ++i)
+            if (keyState[i] != 0)
+                keyState[i] = 0, isKeyStateChanged = true;
     }
 
     return keyTexture;

@@ -15,7 +15,9 @@
 
 class ShadertoyShader;
 
-class ShadertoyRenderWidget : public QOpenGLWidget
+/** The "classic" QOpenGLWidget, using ShadertoyRenderer */
+class ShadertoyRenderWidget
+        : public QOpenGLWidget
 {
     Q_OBJECT
 public:
