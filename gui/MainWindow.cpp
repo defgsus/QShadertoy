@@ -224,6 +224,11 @@ void MainWindow::Private::createMenu()
         shaderList->setEnableThumbnails(e);
     });
 
+
+    // ########## VIEW ############
+    viewMenu = win->menuBar()->addMenu(tr("View"));
+
+
     // ############ DEBUG ##############
 #ifndef NDEBUG
     menu = win->menuBar()->addMenu(tr("Debug"));
@@ -248,10 +253,15 @@ void MainWindow::Private::createMenu()
             qDebug() << (img.isNull() ? "FAILED" : "ok");
         }
     });
-#endif
 
-    // ########## VIEW ############
-    viewMenu = win->menuBar()->addMenu(tr("View"));
+    a = menu->addAction(tr("dump window state"));
+    connect(a, &QAction::triggered, [=]()
+    {
+        QByteArray a = win->saveState();
+        qDebug() << a.toPercentEncoding();
+    });
+
+#endif
 
 }
 

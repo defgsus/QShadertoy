@@ -15,6 +15,10 @@
 #include "log.h"
 
 
+QString ShadertoyShaderInfo::getUrl() const
+{
+    return QString("https://shadertoy.com/view/%1").arg(id);
+}
 
 
 ShadertoyShader::ShadertoyShader(const QString& id)

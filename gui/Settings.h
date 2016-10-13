@@ -38,6 +38,8 @@ public:
     void storeGeometry(const QWidget*);
 
 private:
+    static QByteArray p_defaultMainWindowState();
+
     QSettings* p_set_;
 };
 

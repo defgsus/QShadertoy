@@ -16,7 +16,7 @@ There is a ShaderListModel and a ShaderSortModel to display shaders in a QTableV
 
 You can display and run shaders similiar to the web interface. Also it's possible to edit the code and change some texture input properties. But saving is not supported yet.
 
-It uses QOpenGLFunctions and all that stuff to render shaders either onto a QWidget or offscreen into a QImage. I don't like the QOpenGL* wrappers because they tend to crash the program more often than my own opengl code normally does. This should really be refactured!
+It uses QOpenGLFunctions and all that stuff to render shaders either onto a QWidget or offscreen into a QImage. I don't like the QOpenGL* wrappers because they tend to crash the program more often than my own opengl code normally does. This should really be refactured! Apart from that, the screen refresh is not tightly 60 fps and blocks the GUI somewhat. Maybe i'll try Qt's new 3D-API at some point..
 
 ### Compatibility
 
@@ -24,7 +24,7 @@ On Sunday, 9th Oct. 2016, there were 3771 programs in the public-API ;-)
 
 Of these, 8 shaders either segfault somewhere in QOpenGLShaderProgram::link(), or the first occurence of glClear() blocks forever. ??
 
-334 shaders do not compile. This is probably more than on my regular Ubuntu14/QuadroK1000M/Firefox setup.
+334 shaders do not compile. This is probably more than on my regular Ubuntu14/QuadroK1000M/Firefox setup. Many shaders that do not compile use the `cond ? a += x : b += x` trick which seems to work in WebGL but fails in non-WebGL.
 
 ### List of supported things
 
