@@ -38,6 +38,7 @@ Missing is the whole audio/camera/video input..
 ### Rationale
 
 This is more or less a test-bed to enable any kind of shadertoy program to be executed locally and..
+
     * replace inputs (own textures, audio streams, video files)
     * render to disk in super-HQ
     * perform live
