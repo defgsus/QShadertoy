@@ -56,13 +56,6 @@ void Log::setCallback(std::function<void(const QString&, Level)> func)
     callback_ = func;
 }
 
-#ifdef MCW_USE_QT
-void Log::setSocket(QTcpSocket* s)
-{
-    socket_ = s;
-}
-#endif
-
 bool Log::pullMessage(QString* s, Level* l)
 {
     QMutexLocker lock(&messageMutex_);

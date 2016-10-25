@@ -50,6 +50,7 @@ struct RenderPassView::Private
     void selectTab(int idx);
     void sourceEdited();
     void inputsEdited();
+    void updateCursorInfo();
     QPixmap getPixmap(const QString& src);
 
     RenderPassView* p;
@@ -61,6 +62,7 @@ struct RenderPassView::Private
 
     QTabBar* tabBar;
     QPlainTextEdit* textEdit, *jsonView;
+    QLabel* labelInfo;
     QVector<InputWidget> inputWidgets;
     QMap<QString, QPixmap> pixmaps;
 };
@@ -97,6 +99,11 @@ void RenderPassView::Private::createWidgets()
     f.setStyleHint(QFont::Monospace);
     textEdit->setFont(f);
     textEdit->setTabStopWidth(QFontMetrics(f).width("    "));
+    connect(textEdit, &QPlainTextEdit::cursorPositionChanged,
+            [=]() { updateCursorInfo(); });
+
+    labelInfo = new QLabel(p);
+    lv->addWidget(labelInfo);
 
     auto lh = new QHBoxLayout();
     lv->addLayout(lh);
@@ -199,6 +206,19 @@ void RenderPassView::setShader(const ShadertoyShader& s)
 
     p_->tabBar->setCurrentIndex(0);
     p_->selectTab(0);
+}
+
+void RenderPassView::Private::updateCursorInfo()
+{
+    QTextCursor c = textEdit->textCursor();
+    QString text = tr("%1:%2 (char %3)")
+                   .arg(c.blockNumber() + 1)
+                   .arg(c.columnNumber() + 1)
+                   .arg(c.position() + 1);
+    QString sel = c.selectedText();
+    if (sel.size())
+        text += " " + tr("(%1 chars selected)").arg(sel.size());
+    labelInfo->setText(text);
 }
 
 void RenderPassView::Private::selectTab(int idx)

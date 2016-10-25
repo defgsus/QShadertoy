@@ -36,6 +36,7 @@ public:
         C_LIKES,
         C_PASSES,
         C_NUM_CHARS,
+        C_HAS_SOUND,
         C_USE_TEX,
         C_USE_MUSIC,
         C_USE_KEYBOARD,

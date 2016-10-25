@@ -85,8 +85,12 @@ public slots:
     /** Loads a specific shader by ID from cache */
     bool loadShader(const QString& id);
 
-    /** Get a snapshot for a specific shader */
+    /** Get a snapshot for a specific shader.
+        First tries to load a png from the ./snapshot directory.
+        Then tries to render a snapshot when @ü renderIfNotCached is true,
+        and saves the png for further use */
     QImage getSnapshot(const QString& id, bool renderIfNotCached);
+
 
 private slots:
 

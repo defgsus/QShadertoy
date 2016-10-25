@@ -525,7 +525,7 @@ bool ShadertoyRenderer::Private::createGl()
 
         auto frag = new QOpenGLShader(QOpenGLShader::Fragment, rp.shader);
         QString src =
-            fragSrc1 + fragSrc1b + pass.fragmentSource() + "\n";
+            fragSrc1 + fragSrc1b + "#line 1\n" + pass.fragmentSource() + "\n";
         if (pass.type() == ShadertoyRenderPass::T_SOUND)
         {
             src += fragSrcSound;

@@ -63,16 +63,17 @@ void ShaderListModel::Private::initHeaders()
 {
     columns.clear();
 
-    columns << Column(tr("id"), C_ID)
-            << Column(tr("name"), C_NAME);
+    columns << Column(tr("id"), C_ID);
     if (doThumbnails)
         columns << Column(tr("pic"), C_IMAGE);
-    columns << Column(tr("user"), C_USER)
+    columns << Column(tr("name"), C_NAME)
+            << Column(tr("user"), C_USER)
             << Column(tr("date"), C_DATE)
             << Column(tr("views"), C_VIEWS)
             << Column(tr("likes"), C_LIKES)
             << Column(tr("passes"), C_PASSES)
             << Column(tr("chars"), C_NUM_CHARS)
+            << Column(tr("has sound"), C_HAS_SOUND)
             << Column(tr("use texture"), C_USE_TEX)
             << Column(tr("use keyboard"), C_USE_KEYBOARD)
             << Column(tr("use mouse"), C_USE_MOUSE)
@@ -167,6 +168,7 @@ QVariant ShaderListModel::data(const QModelIndex &index, int role) const
             case C_LIKES: return shader.info().likes;
             case C_PASSES: return (int)shader.numRenderPasses();
             case C_NUM_CHARS: return (int)shader.info().numChars;
+            case C_HAS_SOUND: return shader.info().hasSound;
             case C_USE_TEX: return shader.info().usesTextures;
             case C_USE_MUSIC: return shader.info().usesMusic;
             case C_USE_KEYBOARD: return shader.info().usesKeyboard;

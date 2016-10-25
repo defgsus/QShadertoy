@@ -142,7 +142,7 @@ struct ShadertoyShaderInfo
     QString id, name, username, description;
     QDateTime date;
     QStringList tags;
-    /** Number of characters of all passes */
+    /** Number of characters of all passes (including comments) */
     size_t numChars;
     /** Uses textures (not buffers) */
     bool usesTextures,
@@ -152,7 +152,9 @@ struct ShadertoyShaderInfo
          usesCamera,
          usesMicrophone,
          usesKeyboard,
-         usesMouse;
+         usesMouse,
+    /** Has a Sound shader */
+         hasSound;
 
     /** Returns the shadertoy.com url */
     QString getUrl() const;

@@ -63,6 +63,7 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
     p_info_.usesCamera = false;
     p_info_.usesMicrophone = false;
     p_info_.usesKeyboard = false;
+    p_info_.hasSound = false;
 
     // --- read render passes ---
 
@@ -95,8 +96,12 @@ bool ShadertoyShader::setJsonData(const QJsonObject& o)
 
         p_info_.numChars += pass.fragmentSource().size();
 
+        /** @todo "iMouse" could be commented out */
         if (pass.fragmentSource().contains("iMouse"))
             p_info_.usesMouse = true;
+
+        if (pass.type() == ShadertoyRenderPass::T_SOUND)
+            p_info_.hasSound = true;
 
         for (size_t i = 0; i < pass.numInputs(); ++i)
         {
